@@ -276,3 +276,4 @@ SQLite resta supportato in locale:
 ```env
 DATABASE_URL=sqlite:///./ai_brain.db
 ```
+# ai-brain-v2
