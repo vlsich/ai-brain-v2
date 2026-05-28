@@ -1,6 +1,7 @@
 .env
-.venv/
-__pycache__/
-.pycache/
+.venv
+__pycache__
 *.pyc
 ai_brain.db
+.pycache
+
