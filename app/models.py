@@ -52,3 +52,18 @@ class LongTermMemory(Base):
     importance: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     source_task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class BrainState(Base):
+    __tablename__ = "brain_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.brain_core import BrainCore
 from app.config import get_settings
 from app.database import SessionLocal, get_db, init_db
 from app.memory import Memory
@@ -75,12 +76,24 @@ class MemorySearchRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class BrainSeedMemory(BaseModel):
+    memory_type: str
+    title: str
+    content: str
+    importance: int = Field(default=4, ge=1, le=5)
+
+
+class BrainSeedRequest(BaseModel):
+    memories: list[BrainSeedMemory] = Field(default_factory=list)
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
     db = SessionLocal()
     try:
         Memory(db).ensure_core_memories()
+        BrainCore(db).seed()
     finally:
         db.close()
 
@@ -163,3 +176,14 @@ def search_memory(payload: MemorySearchRequest, db: Session = Depends(get_db)) -
         memory_type=payload.memory_type,
         limit=payload.limit,
     )
+
+
+@app.get("/brain/state")
+def get_brain_state(db: Session = Depends(get_db)) -> dict:
+    return BrainCore(db).get_state_summary()
+
+
+@app.post("/brain/seed")
+def seed_brain(payload: BrainSeedRequest, db: Session = Depends(get_db)) -> dict:
+    memories = [memory.model_dump() for memory in payload.memories] if payload.memories else None
+    return BrainCore(db).seed(memories=memories)

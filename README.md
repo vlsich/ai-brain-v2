@@ -33,7 +33,7 @@ Per usare Telegram, crea un bot con BotFather e inserisci il token:
 
 ```env
 TELEGRAM_BOT_TOKEN=123456:ABC...
-TELEGRAM_MAX_RESPONSE_CHARS=1200
+TELEGRAM_MAX_RESPONSE_CHARS=2500
 ```
 
 ## Avvio
@@ -134,10 +134,11 @@ Telegram puo essere usato come interfaccia principale di AI Brain. Ogni messaggi
 
 Prima dell'invio, `ResponseFormatter` ripulisce e adatta la risposta per Telegram:
 
-- massimo `TELEGRAM_MAX_RESPONSE_CHARS`, default 1200
-- italiano naturale e operativo
-- niente emoji o markdown decorativo casuale
-- struttura semplice: risposta diretta, punti chiave, prossimo passo
+- massimo `TELEGRAM_MAX_RESPONSE_CHARS`, default 2500
+- Markdown Telegram pulito
+- italiano naturale, chiaro e operativo
+- niente emoji e niente simboli decorativi casuali
+- struttura consigliata: risposta diretta, analisi, piano operativo, prossimo step
 - se chiedi esplicitamente dettagli o approfondimento, il limite viene rilassato
 - logging qualita: agenti usati, memorie usate, lunghezza risposta e score finale
 
@@ -165,6 +166,11 @@ Tabelle principali:
 
 Categorie di memoria a lungo termine:
 
+- `identity`
+- `business_profile`
+- `goals`
+- `tasks`
+- `agent_instructions`
 - `user_profile`
 - `business_goals`
 - `brand_positioning`
@@ -174,6 +180,48 @@ Categorie di memoria a lungo termine:
 - `lessons_learned`
 - `agents_behavior`
 - `project_roadmap`
+
+## Brain Core
+
+`BrainCore` trasforma la memoria lunga in un cervello persistente. Mantiene un `Brain State Summary` sempre aggiornato con identita, business profile, obiettivi, priorita, posizionamento, preferenze, decisioni e istruzioni agenti.
+
+Tipi memoria canonici:
+
+- `identity`
+- `business_profile`
+- `goals`
+- `preferences`
+- `brand_positioning`
+- `content_strategy`
+- `decisions`
+- `lessons`
+- `tasks`
+- `agent_instructions`
+
+Leggere lo stato del Brain:
+
+```bash
+curl http://127.0.0.1:8000/brain/state
+```
+
+Seed manuale del Brain:
+
+```bash
+curl -X POST http://127.0.0.1:8000/brain/seed \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memories": [
+      {
+        "memory_type": "goals",
+        "title": "Priorita corrente",
+        "content": "Migliorare AI Brain come cervello operativo per business finance e personal brand.",
+        "importance": 5
+      }
+    ]
+  }'
+```
+
+Il Manager Agent riceve il `Brain State Summary` prima di rispondere. Dopo ogni task importante, il Memory Curator salva eventuali memorie utili e il Brain State viene aggiornato.
 
 Leggere tutte le memorie:
 
@@ -236,7 +284,7 @@ TELEGRAM_BOT_TOKEN=...
 DATABASE_URL=...
 OPENAI_MODEL=gpt-4o-mini
 APP_ENV=production
-TELEGRAM_MAX_RESPONSE_CHARS=1200
+TELEGRAM_MAX_RESPONSE_CHARS=2500
 ```
 
 Railway imposta automaticamente `PORT` per il servizio web. Lo script `start_web.sh` usa quel valore.

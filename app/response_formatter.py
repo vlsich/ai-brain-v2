@@ -4,37 +4,49 @@ import re
 
 
 class ResponseFormatter:
-    def __init__(self, telegram_max_chars: int = 1200):
+    def __init__(self, telegram_max_chars: int = 2500):
         self.telegram_max_chars = telegram_max_chars
 
     def format_chat(self, user_message: str, raw_reply: str) -> str:
         max_chars = None if self._wants_detail(user_message) else self.telegram_max_chars
-        return self._format(user_message=user_message, raw_reply=raw_reply, max_chars=max_chars)
+        return self._format(user_message=user_message, raw_reply=raw_reply, max_chars=max_chars, markdown=False)
 
     def format_telegram(self, user_message: str, raw_reply: str) -> str:
         max_chars = None if self._wants_detail(user_message) else self.telegram_max_chars
-        return self._format(user_message=user_message, raw_reply=raw_reply, max_chars=max_chars)
+        return self._format(user_message=user_message, raw_reply=raw_reply, max_chars=max_chars, markdown=True)
 
-    def _format(self, user_message: str, raw_reply: str, max_chars: int | None) -> str:
+    def _format(self, user_message: str, raw_reply: str, max_chars: int | None, markdown: bool) -> str:
         cleaned = self._clean_text(raw_reply)
         if not cleaned:
-            return "Non ho abbastanza informazioni per rispondere bene. Puoi darmi un po' piu di contesto?"
+            return self._render_simple(
+                "Non ho abbastanza informazioni per rispondere bene. Puoi darmi un po' piu di contesto?",
+                max_chars=max_chars,
+                markdown=markdown,
+            )
 
         if self._is_simple_request(user_message):
-            return self._truncate(self._first_useful_sentences(cleaned, max_sentences=3), max_chars)
+            return self._render_simple(
+                self._first_useful_sentences(cleaned, max_sentences=3),
+                max_chars=max_chars,
+                markdown=markdown,
+            )
 
         direct_answer = self._first_useful_sentences(cleaned, max_sentences=2)
-        key_points = self._extract_key_points(cleaned, limit=4, exclude_text=direct_answer)
+        analysis_points = self._extract_key_points(cleaned, limit=3, exclude_text=direct_answer)
+        plan_points = self._extract_plan_points(cleaned, limit=4, exclude_text=" ".join([direct_answer, " ".join(analysis_points)]))
         next_step = self._next_step(user_message, cleaned)
 
-        parts = [direct_answer]
-        if key_points:
-            parts.append("Punti chiave:\n" + "\n".join(f"- {point}" for point in key_points))
-        if next_step:
-            parts.append(f"Prossimo passo: {next_step}")
+        if not plan_points:
+            plan_points = analysis_points[:2]
 
-        formatted = "\n\n".join(part for part in parts if part.strip())
-        return self._truncate(formatted, max_chars)
+        sections = [
+            ("Risposta diretta", direct_answer),
+            ("Analisi", analysis_points),
+            ("Piano operativo", plan_points),
+            ("Prossimo step", next_step),
+        ]
+        formatted = self._render_sections(sections, markdown=markdown)
+        return self._truncate(formatted, max_chars, markdown=markdown)
 
     def quality_score(self, text: str) -> float:
         if not text.strip():
@@ -48,11 +60,11 @@ class ResponseFormatter:
             score -= 0.15
         if any(marker in text.lower() for marker in ("memory context", "score=", "matched=", "dettagli agenti")):
             score -= 0.2
-        if text.count("#") > 2 or text.count("*") > 4:
+        if text.count("#") > 2:
             score -= 0.1
-        if "Prossimo passo:" in text:
+        if "Prossimo step" in text or "Prossimo passo:" in text:
             score += 0.08
-        if "Punti chiave:" in text or len(text) < 450:
+        if "Piano operativo" in text or "Punti chiave:" in text or len(text) < 450:
             score += 0.05
 
         return round(max(0.0, min(1.0, score)), 3)
@@ -80,6 +92,11 @@ class ResponseFormatter:
             "content",
             "crescita",
             "conversione",
+            "business",
+            "contenuti",
+            "finance",
+            "finanza",
+            "brand",
         )
         if any(term in normalized for term in strategic_terms):
             return False
@@ -144,6 +161,29 @@ class ResponseFormatter:
                 break
         return points
 
+    def _extract_plan_points(self, text: str, limit: int, exclude_text: str = "") -> list[str]:
+        action_markers = (
+            "crea",
+            "usa",
+            "pubblica",
+            "scegli",
+            "trasforma",
+            "collega",
+            "posiziona",
+            "misura",
+            "testa",
+            "ottimizza",
+            "porta",
+            "costruisci",
+        )
+        candidates = self._extract_key_points(text, limit=12, exclude_text=exclude_text)
+        action_points = [
+            point
+            for point in candidates
+            if any(marker in point.lower() for marker in action_markers)
+        ]
+        return (action_points or candidates)[:limit]
+
     def _next_step(self, user_message: str, text: str) -> str:
         normalized = user_message.lower()
         if any(word in normalized for word in ("strategia", "strategy", "piano", "crescita")):
@@ -154,16 +194,49 @@ class ResponseFormatter:
             return "dimmi se vuoi che lo trasformi in una decisione operativa."
         return "dimmi il canale o l'obiettivo principale e preparo la versione esecutiva."
 
-    def _truncate(self, text: str, max_chars: int | None) -> str:
+    def _render_simple(self, text: str, max_chars: int | None, markdown: bool) -> str:
+        text = self._truncate(text.strip(), max_chars, markdown=False)
+        return self._escape_markdown_v2(text) if markdown else text
+
+    def _render_sections(self, sections: list[tuple[str, str | list[str]]], markdown: bool) -> str:
+        rendered_sections = []
+        for title, content in sections:
+            if isinstance(content, list):
+                body_lines = [line for line in content if line.strip()]
+                if not body_lines:
+                    continue
+                if markdown:
+                    body = "\n".join(f"\\- {self._escape_markdown_v2(line)}" for line in body_lines)
+                else:
+                    body = "\n".join(f"- {line}" for line in body_lines)
+            else:
+                if not content.strip():
+                    continue
+                body = self._escape_markdown_v2(content) if markdown else content
+
+            if markdown:
+                rendered_sections.append(f"*{self._escape_markdown_v2(title)}*\n{body}")
+            else:
+                rendered_sections.append(f"{title}\n{body}")
+
+        return "\n\n".join(rendered_sections)
+
+    def _truncate(self, text: str, max_chars: int | None, markdown: bool = False) -> str:
         text = text.strip()
         if max_chars is None or len(text) <= max_chars:
             return text
 
-        truncated = text[: max_chars - 80].rstrip()
+        suffix = "Risposta sintetizzata per Telegram. Chiedimi 'approfondisci' per il piano completo."
+        truncated = text[: max_chars - len(suffix) - 4].rstrip()
         last_break = max(truncated.rfind("\n\n"), truncated.rfind(". "), truncated.rfind("\n"))
         if last_break > max_chars * 0.55:
             truncated = truncated[:last_break].rstrip()
-        return f"{truncated}\n\nRisposta sintetizzata per Telegram. Chiedimi 'approfondisci' per il piano completo."
+        if markdown:
+            suffix = self._escape_markdown_v2(suffix)
+        return f"{truncated}\n\n{suffix}"
+
+    def _escape_markdown_v2(self, text: str) -> str:
+        return re.sub(r"([_*\[\]()~`>#+\-=|{}.!])", r"\\\1", text)
 
     def _remove_internal_labels(self, text: str) -> str:
         patterns = (

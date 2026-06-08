@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_timeout_seconds: float = 20.0
     telegram_bot_token: Optional[str] = None
-    telegram_max_response_chars: int = 1200
+    telegram_max_response_chars: int = 2500
     port: int = 8000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

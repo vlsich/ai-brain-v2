@@ -11,14 +11,20 @@ from app.models import AgentResult, LongTermMemory, Task
 
 
 MEMORY_TYPE_PRIORITY = {
+    "identity": 1.5,
     "user_profile": 1.45,
+    "business_profile": 1.42,
+    "goals": 1.4,
     "business_goals": 1.38,
     "brand_positioning": 1.32,
     "preferences": 1.25,
     "content_strategy": 1.02,
+    "tasks": 0.92,
     "project_roadmap": 0.92,
     "decisions": 0.9,
+    "lessons": 0.82,
     "lessons_learned": 0.82,
+    "agent_instructions": 0.55,
     "agents_behavior": 0.45,
 }
 

@@ -10,15 +10,16 @@ from app.agents.prompts import GLOBAL_AGENT_RULES
 
 
 MEMORY_TYPES = {
-    "user_profile",
-    "business_goals",
+    "identity",
+    "business_profile",
+    "goals",
     "brand_positioning",
     "preferences",
     "decisions",
     "content_strategy",
-    "lessons_learned",
-    "agents_behavior",
-    "project_roadmap",
+    "lessons",
+    "tasks",
+    "agent_instructions",
 }
 
 
@@ -55,9 +56,9 @@ class MemoryCuratorAgent:
                             "Rispondi solo con JSON valido nel formato: "
                             "{\"memories\":[{\"memory_type\":\"...\",\"title\":\"...\","
                             "\"content\":\"...\",\"importance\":1}]}. "
-                            "Usa solo questi memory_type: user_profile, business_goals, "
-                            "brand_positioning, preferences, decisions, content_strategy, lessons_learned, "
-                            "agents_behavior, project_roadmap. Salva solo informazioni utili, "
+                            "Usa solo questi memory_type: identity, business_profile, goals, "
+                            "brand_positioning, preferences, decisions, content_strategy, lessons, "
+                            "tasks, agent_instructions. Salva solo informazioni utili, "
                             "riusabili e non ovvie. Non salvare rumore, passaggi generici, risposte "
                             "temporanee, ripetizioni, semplici output generati o dettagli privi di valore futuro. "
                             "Se una memoria simile sembra gia esistere, salva solo un aggiornamento realmente nuovo. "
@@ -164,7 +165,7 @@ class MemoryCuratorAgent:
         if "strategia" in normalized or "roadmap" in normalized:
             memories.append(
                 {
-                    "memory_type": "business_goals",
+                    "memory_type": "goals",
                     "title": "Obiettivo strategico business finance",
                     "content": f"Michele vuole definire una direzione operativa per crescita, contenuti o conversione: {user_request}",
                     "importance": 4,

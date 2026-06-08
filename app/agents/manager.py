@@ -189,8 +189,34 @@ class ManagerAgent:
                 "Posso iniziare a costruire il tuo profilo dai prossimi task e conversazioni."
             )
 
+        clean_points = self._clean_memory_context_for_user(memory_context)
         return (
             "Da quello che ricordo:\n\n"
-            f"{memory_context}\n\n"
+            f"{clean_points}\n\n"
             "Uso queste informazioni come contesto, non come verita definitiva: puoi correggerle quando vuoi."
         )
+
+    def _clean_memory_context_for_user(self, memory_context: str) -> str:
+        noisy_prefixes = (
+            "BRAIN STATE SUMMARY",
+            "Brain State Summary",
+            "Questa sintesi rappresenta",
+            "MEMORY CONTEXT",
+            "Usa queste memorie",
+        )
+        lines = []
+        for raw_line in memory_context.splitlines():
+            line = raw_line.strip(" -")
+            if not line:
+                continue
+            if any(line.startswith(prefix) for prefix in noisy_prefixes):
+                continue
+            if "id=" in line or "score=" in line or "matched=" in line:
+                continue
+            lines.append(line)
+            if len(lines) >= 5:
+                break
+
+        if not lines:
+            return memory_context[:900].strip()
+        return "\n".join(f"- {line}" for line in lines)

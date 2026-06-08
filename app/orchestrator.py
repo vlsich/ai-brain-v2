@@ -10,6 +10,7 @@ from app.agents.finance_strategist import FinanceContentStrategist
 from app.agents.manager import ManagerAgent
 from app.agents.memory_curator import MemoryCuratorAgent
 from app.agents.research import ResearchAgent
+from app.brain_core import BrainCore
 from app.config import get_settings
 from app.memory import Memory
 
@@ -21,6 +22,7 @@ class Orchestrator:
     def __init__(self, db: Session):
         self.settings = get_settings()
         self.memory = Memory(db)
+        self.brain_core = BrainCore(db)
         self.manager = ManagerAgent(self.settings)
         self.research = ResearchAgent(self.settings)
         self.finance_strategist = FinanceContentStrategist(self.settings)
@@ -44,7 +46,8 @@ class Orchestrator:
 
         try:
             retrieved_memories = self.memory.retrieve_relevant_memories(prompt, limit=7)
-            memory_context = self.memory.build_context_from_memory(retrieved_memories)
+            brain_context = self.brain_core.context_for_agents()
+            memory_context = self._build_agent_context(brain_context, retrieved_memories)
             agents_to_use = self.manager.choose_agents(prompt)
             results: dict[str, str] = {}
             agents_used_memory = agents_to_use + ["manager"] if retrieved_memories else []
@@ -63,6 +66,7 @@ class Orchestrator:
                     results={},
                     final_answer=final_answer,
                 )
+                self._maybe_update_brain_state(prompt, ["manager"], len(saved_memories))
 
                 return {
                     "task_id": task.id,
@@ -112,6 +116,7 @@ class Orchestrator:
                 results=results,
                 final_answer=final_answer,
             )
+            self._maybe_update_brain_state(prompt, agents_to_use, len(saved_memories))
 
             return {
                 "task_id": task.id,
@@ -154,6 +159,20 @@ class Orchestrator:
 
     def _format_memory_context(self, memories: list[dict[str, Any]]) -> str:
         return self.memory.build_context_from_memory(memories)
+
+    def _build_agent_context(self, brain_context: str, retrieved_memories: list[dict[str, Any]]) -> str:
+        memory_context = self.memory.build_context_from_memory(retrieved_memories)
+        parts = []
+        if brain_context:
+            parts.append(f"BRAIN STATE SUMMARY\n{brain_context}")
+        if memory_context:
+            parts.append(memory_context)
+        return "\n\n".join(parts)
+
+    def _maybe_update_brain_state(self, prompt: str, agents_to_use: list[str], saved_memories_count: int) -> None:
+        if self.brain_core.should_update_after_task(prompt, agents_to_use, saved_memories_count):
+            state = self.brain_core.update_state_summary()
+            logger.info("Brain state updated version=%s", state["version"])
 
     def _serialize_retrieved_memories(self, memories: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [

@@ -83,7 +83,7 @@ class FinanceContentStrategist:
             "1. Educazione finanziaria semplice e applicabile.\n"
             "2. Errori comuni, bias e miti sulla finanza personale.\n"
             "3. Strategie, framework e checklist per investire con metodo.\n"
-            "4. Dietro le quinte del business, AI workflow e costruzione del personal brand.\n\n"
+            "4. Dietro le quinte del business, metodo decisionale e costruzione del personal brand.\n\n"
             "Format consigliati:\n"
             "- Hook virale + errore finance + correzione pratica.\n"
             "- Mini-lezione da 45-60 secondi con esempio numerico.\n"

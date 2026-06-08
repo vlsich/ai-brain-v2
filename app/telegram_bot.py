@@ -4,9 +4,11 @@ import asyncio
 import logging
 
 from telegram import Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ParseMode
+from telegram.error import TelegramError
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+from app.brain_core import BrainCore
 from app.config import get_settings
 from app.database import SessionLocal, init_db
 from app.memory import Memory
@@ -92,7 +94,11 @@ async def reply_text(update: Update, text: str) -> None:
         return
 
     for chunk in split_message(text):
-        await update.message.reply_text(chunk)
+        try:
+            await update.message.reply_text(chunk, parse_mode=ParseMode.MARKDOWN_V2)
+        except TelegramError:
+            logger.exception("Telegram markdown parsing failed, falling back to plain text")
+            await update.message.reply_text(strip_markdown_v2(chunk))
 
 
 def split_message(text: str) -> list[str]:
@@ -112,6 +118,10 @@ def split_message(text: str) -> list[str]:
     if current:
         chunks.append(current)
     return chunks
+
+
+def strip_markdown_v2(text: str) -> str:
+    return text.replace("\\", "")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -143,6 +153,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         Memory(db).ensure_core_memories()
+        BrainCore(db).seed()
     finally:
         db.close()
     application = build_application()
