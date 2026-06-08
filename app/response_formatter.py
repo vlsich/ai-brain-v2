@@ -1,7 +1,41 @@
 from __future__ import annotations
 
+import ast
 import html
+import json
 import re
+from typing import Any
+
+
+SECTION_LABELS = (
+    "vittorie",
+    "wins",
+    "blocchi",
+    "blockers",
+    "priorita",
+    "priorità",
+    "priorities",
+    "task",
+    "raccomandazioni",
+    "raccomandazione",
+    "recommendations",
+    "analisi",
+    "analysis",
+    "prossimo passo",
+    "prossimi passi",
+    "next steps",
+)
+
+
+SECTION_TITLES = {
+    "daily_briefing": "📅 Daily Briefing",
+    "priorities": "🎯 Priorities",
+    "wins": "🏆 Wins",
+    "blockers": "🚧 Blockers",
+    "analysis": "💡 Analysis",
+    "recommendations": "📌 Recommendations",
+    "next_steps": "🚀 Next Steps",
+}
 
 
 class ResponseFormatter:
@@ -16,7 +50,87 @@ class ResponseFormatter:
         max_chars = None if self._wants_detail(user_message) else self.telegram_max_chars
         return self._format(user_message=user_message, raw_reply=raw_reply, max_chars=max_chars, markdown=True)
 
+    def format_task_list(self, tasks: Any, markdown: bool = True) -> str:
+        points = self._coerce_points(tasks)
+        if not points:
+            return self._render_section("priorities", ["Nessun task operativo disponibile."], markdown, numbered=True)
+        return self._render_section("priorities", points, markdown, numbered=True)
+
+    def format_briefing(
+        self,
+        wins: Any = None,
+        blockers: Any = None,
+        priorities: Any = None,
+        analysis: Any = None,
+        recommendations: Any = None,
+        next_steps: Any = None,
+        markdown: bool = True,
+    ) -> str:
+        sections = [
+            self._render_section("daily_briefing", ["Briefing operativo pronto per oggi."], markdown),
+            self._render_section("wins", self._coerce_points(wins), markdown),
+            self._render_section("blockers", self._coerce_points(blockers), markdown),
+            self._render_section("priorities", self._coerce_points(priorities), markdown, numbered=True),
+            self._render_section("analysis", self._coerce_points(analysis), markdown),
+            self._render_section("recommendations", self._coerce_points(recommendations), markdown),
+            self._render_section("next_steps", self._coerce_points(next_steps), markdown),
+        ]
+        return self._join_sections(sections)
+
+    def format_review(self, review: Any, markdown: bool = True) -> str:
+        payload = review if isinstance(review, dict) else {}
+        return self._join_sections(
+            [
+                self._render_section("analysis", self._coerce_points(payload.get("progress") or payload.get("alignment") or review), markdown),
+                self._render_section("priorities", self._coerce_points(payload.get("completed_tasks")), markdown, numbered=True),
+                self._render_section("recommendations", self._coerce_points(payload.get("recommendations")), markdown),
+                self._render_section("next_steps", ["Scegli la priorita principale della prossima settimana e trasformala in 3 task eseguibili."], markdown),
+            ]
+        )
+
+    def format_decision(self, decision: Any, markdown: bool = True) -> str:
+        payload = decision if isinstance(decision, dict) else {"decision": decision}
+        analysis = [
+            payload.get("title"),
+            payload.get("decision"),
+            payload.get("reasoning"),
+            payload.get("expected_outcome"),
+        ]
+        return self._join_sections(
+            [
+                self._render_section("analysis", self._coerce_points(analysis), markdown),
+                self._render_section("recommendations", self._coerce_points(payload.get("recommendations")), markdown),
+                self._render_section("next_steps", ["Rivedi questa decisione quando cambiano dati, priorita o risultati."], markdown),
+            ]
+        )
+
+    def format_content_plan(self, plan: Any, markdown: bool = True) -> str:
+        payload = plan if isinstance(plan, dict) else {}
+        analysis_items = []
+        if payload.get("summary"):
+            analysis_items.append(payload["summary"])
+        analysis_items.extend(self._coerce_points(payload.get("plans"))[:4])
+        analysis_items.extend(self._coerce_points(payload.get("ideas"))[:5])
+        task_items = self._coerce_points(payload.get("tasks"))[:6]
+        return self._join_sections(
+            [
+                self._render_section("analysis", analysis_items or self._coerce_points(plan), markdown),
+                self._render_section("priorities", task_items, markdown, numbered=True),
+                self._render_section("recommendations", ["Pubblica prima il contenuto con hook piu chiaro e CTA piu vicina alla monetizzazione."], markdown),
+                self._render_section("next_steps", ["Scegli un contenuto e chiedimi di trasformarlo in script pronto da registrare."], markdown),
+            ]
+        )
+
+    def format_recommendations(self, recommendations: Any, markdown: bool = True) -> str:
+        return self._render_section("recommendations", self._coerce_points(recommendations), markdown)
+
     def _format(self, user_message: str, raw_reply: str, max_chars: int | None, markdown: bool) -> str:
+        parsed = self._extract_structured(raw_reply)
+        if parsed is not None:
+            formatted = self._format_structured(user_message, parsed, markdown)
+            if formatted:
+                return self._truncate(formatted, max_chars, markdown=markdown)
+
         cleaned = self._clean_text(raw_reply)
         if not cleaned:
             return self._render_simple(
@@ -33,6 +147,15 @@ class ResponseFormatter:
             )
 
         direct_answer = self._first_useful_sentences(cleaned, max_sentences=2)
+        if (
+            self._is_briefing_request(user_message)
+            or self._looks_like_labeled_digest(direct_answer)
+            or self._needs_compact_title(user_message, direct_answer)
+        ):
+            direct_answer = self._digest_title(user_message)
+        wins_points = self._extract_label_points(cleaned, labels=("vittorie", "wins"), limit=3)
+        blocker_points = self._extract_label_points(cleaned, labels=("blocchi", "blockers"), limit=3)
+        priority_points = self._extract_label_points(cleaned, labels=("priorita", "priorità", "priorities", "task"), limit=4)
         analysis_points = self._extract_key_points(cleaned, limit=3, exclude_text=direct_answer)
         plan_points = self._extract_plan_points(cleaned, limit=4, exclude_text=" ".join([direct_answer, " ".join(analysis_points)]))
         next_step = self._next_step(user_message, cleaned)
@@ -40,12 +163,20 @@ class ResponseFormatter:
         if not plan_points:
             plan_points = analysis_points[:2]
 
-        sections = [
-            ("Risposta Diretta", direct_answer),
-            ("Analisi", analysis_points),
-            ("Piano Operativo", plan_points),
-            ("Prossimo Passo", next_step),
-        ]
+        sections = []
+        if self._is_briefing_request(user_message):
+            sections.append(("Daily Briefing", direct_answer))
+        if wins_points:
+            sections.append(("Wins", wins_points))
+        if blocker_points:
+            sections.append(("Blockers", blocker_points))
+        sections.append(("Priorities", priority_points or plan_points))
+        combined_analysis = self._dedupe_points(([direct_answer] if not self._is_briefing_request(user_message) else []) + analysis_points)
+        sections.append(("Analysis", combined_analysis))
+        recommendations = self._extract_label_points(cleaned, labels=("raccomandazioni", "raccomandazione", "recommendations"), limit=4)
+        if recommendations:
+            sections.append(("Recommendations", recommendations))
+        sections.append(("Next Steps", next_step))
         formatted = self._render_sections(sections, markdown=markdown, user_message=user_message)
         return self._truncate(formatted, max_chars, markdown=markdown)
 
@@ -57,7 +188,11 @@ class ResponseFormatter:
         length = len(text)
         if length > self.telegram_max_chars:
             score -= min((length - self.telegram_max_chars) / self.telegram_max_chars, 0.35)
-        if re.search(r"[\U0001F300-\U0001FAFF]", text):
+        allowed_section_icons = ("📅", "🎯", "💡", "🚀", "🏆", "🚧", "📌")
+        text_without_allowed_icons = text
+        for icon in allowed_section_icons:
+            text_without_allowed_icons = text_without_allowed_icons.replace(icon, "")
+        if re.search(r"[\U0001F300-\U0001FAFF]", text_without_allowed_icons):
             score -= 0.15
         if any(marker in text.lower() for marker in ("memory context", "score=", "matched=", "dettagli agenti")):
             score -= 0.2
@@ -70,15 +205,125 @@ class ResponseFormatter:
 
         return round(max(0.0, min(1.0, score)), 3)
 
+    def _format_structured(self, user_message: str, payload: Any, markdown: bool) -> str:
+        if isinstance(payload, list):
+            return self.format_task_list(payload, markdown=markdown)
+        if not isinstance(payload, dict):
+            return ""
+
+        keys = set(payload)
+        normalized = user_message.lower()
+        if {"wins", "blockers", "priorities"}.intersection(keys) or "briefing" in normalized:
+            return self.format_briefing(
+                wins=payload.get("wins"),
+                blockers=payload.get("blockers"),
+                priorities=payload.get("priorities") or payload.get("tasks"),
+                analysis=payload.get("analysis"),
+                recommendations=payload.get("recommendations"),
+                next_steps=payload.get("next_steps"),
+                markdown=markdown,
+            )
+        if {"plans", "ideas", "tasks"}.intersection(keys) or any(term in normalized for term in ("contenuto", "contenuti", "idee", "piano editoriale")):
+            return self.format_content_plan(payload, markdown=markdown)
+        if {"decision", "reasoning", "expected_outcome"}.intersection(keys) or "decision" in normalized:
+            return self.format_decision(payload, markdown=markdown)
+        if {"progress", "completed_tasks", "alignment"}.intersection(keys) or "review" in normalized:
+            return self.format_review(payload, markdown=markdown)
+        if {"recommendations", "raccomandazioni"}.intersection(keys):
+            return self.format_recommendations(payload.get("recommendations") or payload.get("raccomandazioni"), markdown=markdown)
+
+        return ""
+
+    def _render_section(
+        self,
+        section_key: str,
+        content: Any,
+        markdown: bool,
+        numbered: bool = False,
+    ) -> str:
+        points = self._dedupe_points(self._coerce_points(content))
+        if not points:
+            return ""
+
+        title = SECTION_TITLES.get(section_key, section_key)
+        if section_key == "daily_briefing":
+            body = "\n".join(self._escape_html(point) if markdown else point for point in points[:2])
+        elif numbered:
+            body = "\n".join(
+                f"{index}. {self._escape_html(point) if markdown else point}"
+                for index, point in enumerate(points, start=1)
+            )
+        else:
+            body = "\n".join(f"• {self._escape_html(point) if markdown else point}" for point in points)
+
+        if markdown:
+            return f"<b>{self._escape_html(title)}</b>\n{body}"
+        return f"{title}\n{body}"
+
+    def _join_sections(self, sections: list[str]) -> str:
+        return "\n\n".join(section.strip() for section in sections if section and section.strip())
+
+    def _coerce_points(self, value: Any, limit: int = 8) -> list[str]:
+        if value in (None, "", []):
+            return []
+        if isinstance(value, str):
+            text = self._clean_text(value)
+            raw_lines = [line.strip() for line in text.splitlines() if line.strip()]
+            if len(raw_lines) <= 1:
+                raw_lines = re.split(r"(?<=[.!?])\s+", text)
+            return self._dedupe_points(
+                [
+                    self._compact_mobile_line(self._clean_point(line))
+                    for line in raw_lines
+                    if self._is_useful_sentence(self._clean_point(line))
+                ]
+            )[:limit]
+        if isinstance(value, dict):
+            return [self._compact_mobile_line(self._flatten_item(value))]
+        if isinstance(value, (list, tuple, set)):
+            points = []
+            for item in value:
+                if item in (None, ""):
+                    continue
+                if isinstance(item, str):
+                    points.extend(self._coerce_points(item, limit=limit))
+                else:
+                    points.append(self._compact_mobile_line(self._flatten_item(item)))
+            return self._dedupe_points([point for point in points if point])[:limit]
+        return [self._compact_mobile_line(str(value))]
+
+    def _compact_mobile_line(self, text: str, max_chars: int = 170) -> str:
+        text = self._remove_raw_metadata(" ".join(str(text).split()))
+        if len(text) <= max_chars:
+            return text
+        return f"{text[: max_chars - 3].rstrip()}..."
+
+    def _remove_raw_metadata(self, text: str) -> str:
+        text = re.sub(r"\b(id|source_task_id|matched_keywords|score|created_at|updated_at|completed_at):\s*[^-]+", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+-\s+-\s+", " - ", text)
+        return text.strip(" -")
+
+    def _extract_structured(self, text: str) -> Any | None:
+        stripped = text.strip()
+        if not stripped:
+            return None
+
+        candidate = self._strip_code_fence(stripped)
+        parsed = self._parse_structured(candidate)
+        if parsed is not None:
+            return parsed
+        return self._parse_embedded_structured(candidate)
+
     def _clean_text(self, text: str) -> str:
+        text = self._structured_to_text(text)
         text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
         text = re.sub(r"`([^`]+)`", r"\1", text)
         text = re.sub(r"#{1,6}\s*", "", text)
         text = text.replace("---", "\n")
         text = re.sub(r"[*_~>]+", "", text)
         text = re.sub(r"[•●◆◇▶▷]+", "-", text)
-        text = re.sub(r"[\U0001F300-\U0001FAFF]", "", text)
         text = re.sub(r"\[[a-z_]+\]", "", text)
+        text = self._strip_raw_structure_tokens(text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"[ \t]{2,}", " ", text)
         return text.strip()
@@ -94,7 +339,9 @@ class ResponseFormatter:
             "crescita",
             "conversione",
             "business",
+            "contenuto",
             "contenuti",
+            "idee",
             "finance",
             "finanza",
             "brand",
@@ -155,6 +402,11 @@ class ResponseFormatter:
                 continue
             line = re.sub(r"^[-\d. )]+", "", line).strip()
             line = self._remove_internal_labels(line)
+            normalized_line = line.lower().strip(" :")
+            if self._starts_any_section_label(line) or normalized_line in SECTION_LABELS:
+                continue
+            if normalized_line.startswith(("briefing giornaliero", "review settimanale")):
+                continue
             if not self._is_useful_sentence(line):
                 continue
             if line.endswith(":") or line.lower() in exclude_lower:
@@ -192,6 +444,32 @@ class ResponseFormatter:
         ]
         return (action_points or candidates)[:limit]
 
+    def _extract_label_points(self, text: str, labels: tuple[str, ...], limit: int) -> list[str]:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        points: list[str] = []
+        capture = False
+        normalized_labels = tuple(label.lower().strip(":") for label in labels)
+
+        for line in lines:
+            normalized = line.lower().strip(" :")
+            if any(normalized.startswith(label) for label in normalized_labels):
+                capture = True
+                _, _, inline_value = line.partition(":")
+                if inline_value.strip():
+                    points.append(self._clean_point(inline_value))
+                continue
+
+            if capture and self._starts_any_section_label(line):
+                break
+            if capture:
+                point = self._clean_point(line)
+                if self._is_useful_sentence(point):
+                    points.append(point)
+                if len(points) >= limit:
+                    break
+
+        return self._dedupe_points(points)[:limit]
+
     def _next_step(self, user_message: str, text: str) -> str:
         normalized = user_message.lower()
         if any(word in normalized for word in ("strategia", "strategy", "piano", "crescita")):
@@ -214,16 +492,14 @@ class ResponseFormatter:
                 if not body_lines:
                     continue
                 if markdown:
-                    if title == "Piano Operativo":
-                        body = self._render_plan_lines(body_lines, user_message)
-                    elif title == "Analisi":
-                        body = "\n".join(self._escape_html(line) for line in body_lines)
+                    if title in {"Priorities", "Next Steps"}:
+                        body = self._render_numbered_lines(body_lines) if title == "Priorities" else self._render_bullet_lines(body_lines)
                     elif self._is_content_ideas_request(user_message):
                         body = self._render_content_ideas(body_lines)
                     else:
-                        body = "\n".join(f"• {self._escape_html(line)}" for line in body_lines)
+                        body = self._render_bullet_lines(body_lines)
                 else:
-                    if title == "Piano Operativo":
+                    if title in {"Priorities", "Next Steps"}:
                         body = "\n".join(f"{index}. {line}" for index, line in enumerate(body_lines, start=1))
                     else:
                         body = "\n".join(f"- {line}" for line in body_lines)
@@ -233,12 +509,9 @@ class ResponseFormatter:
                 body = self._escape_html(content) if markdown else content
 
             if markdown:
-                if title == "Analisi" and isinstance(content, list) and body:
-                    rendered_sections.append(f"<b>{self._escape_html(title)}</b>\n<blockquote>{body}</blockquote>")
-                else:
-                    rendered_sections.append(f"<b>{self._escape_html(title)}</b>\n{body}")
+                rendered_sections.append(f"<b>{self._escape_html(self._section_title(title))}</b>\n{body}")
             else:
-                rendered_sections.append(f"{title}\n{body}")
+                rendered_sections.append(f"{self._section_title(title)}\n{body}")
 
         return "\n\n".join(rendered_sections)
 
@@ -258,8 +531,14 @@ class ResponseFormatter:
 
     def _render_plan_lines(self, lines: list[str], user_message: str) -> str:
         if self._is_action_plan_request(user_message):
-            return "\n".join(f"☐ {self._escape_html(line)}" for line in lines)
+            return "\n".join(f"• {self._escape_html(line)}" for line in lines)
+        return "\n".join(f"• {self._escape_html(line)}" for line in lines)
+
+    def _render_numbered_lines(self, lines: list[str]) -> str:
         return "\n".join(f"{index}. {self._escape_html(line)}" for index, line in enumerate(lines, start=1))
+
+    def _render_bullet_lines(self, lines: list[str]) -> str:
+        return "\n".join(f"• {self._escape_html(line)}" for line in lines)
 
     def _render_content_ideas(self, lines: list[str]) -> str:
         rendered = []
@@ -279,8 +558,230 @@ class ResponseFormatter:
         normalized = message.lower()
         return any(term in normalized for term in ("checklist", "azione", "to do", "todo", "piano d'azione", "action plan"))
 
+    def _is_briefing_request(self, message: str) -> bool:
+        normalized = message.lower()
+        return any(term in normalized for term in ("briefing", "giornaliero", "daily"))
+
     def _escape_html(self, text: str) -> str:
         return html.escape(text, quote=False)
+
+    def _section_title(self, title: str) -> str:
+        titles = {
+            "Daily Briefing": "📅 Daily Briefing",
+            "Priorities": "🎯 Priorities",
+            "Analysis": "💡 Analysis",
+            "Next Steps": "🚀 Next Steps",
+            "Wins": "🏆 Wins",
+            "Blockers": "🚧 Blockers",
+            "Recommendations": "📌 Recommendations",
+        }
+        return titles.get(title, title)
+
+    def _structured_to_text(self, text: str) -> str:
+        stripped = text.strip()
+        if not stripped:
+            return ""
+
+        candidate = self._strip_code_fence(stripped)
+        parsed = self._parse_structured(candidate)
+        if parsed is None:
+            parsed = self._parse_embedded_structured(candidate)
+        if parsed is None:
+            return text
+        return self._flatten_structured(parsed)
+
+    def _strip_code_fence(self, text: str) -> str:
+        match = re.fullmatch(r"```(?:json|python)?\s*(.*?)\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+        return match.group(1).strip() if match else text
+
+    def _parse_structured(self, text: str) -> Any | None:
+        if not text.startswith(("{", "[")):
+            return None
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        try:
+            parsed = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            return None
+        return parsed if isinstance(parsed, (dict, list, tuple)) else None
+
+    def _parse_embedded_structured(self, text: str) -> Any | None:
+        decoder = json.JSONDecoder()
+        candidates: list[tuple[int, Any]] = []
+
+        for index, char in enumerate(text):
+            if char not in "{[":
+                continue
+            try:
+                parsed, end = decoder.raw_decode(text[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, (dict, list)):
+                candidates.append((end, parsed))
+
+        if not candidates:
+            return None
+
+        for _, parsed in sorted(candidates, key=lambda item: item[0], reverse=True):
+            if isinstance(parsed, dict) and {"summary", "plans", "ideas", "tasks"}.intersection(parsed):
+                return parsed
+
+        return max(candidates, key=lambda item: item[0])[1]
+
+    def _flatten_structured(self, value: Any) -> str:
+        if isinstance(value, dict):
+            return self._flatten_dict(value)
+        if isinstance(value, (list, tuple)):
+            return "\n".join(self._flatten_item(item) for item in value if item)
+        return str(value)
+
+    def _flatten_dict(self, payload: dict[str, Any]) -> str:
+        preferred_order = (
+            "summary",
+            "title",
+            "wins",
+            "blockers",
+            "priorities",
+            "recommendations",
+            "analysis",
+            "plans",
+            "ideas",
+            "tasks",
+            "next_steps",
+        )
+        lines: list[str] = []
+        used_keys = set()
+
+        for key in preferred_order:
+            if key in payload:
+                lines.extend(self._flatten_key_value(key, payload[key]))
+                used_keys.add(key)
+
+        for key, value in payload.items():
+            if key not in used_keys:
+                lines.extend(self._flatten_key_value(str(key), value))
+
+        return "\n".join(line for line in lines if line.strip())
+
+    def _flatten_key_value(self, key: str, value: Any) -> list[str]:
+        label = self._humanize_key(key)
+        if isinstance(value, dict):
+            return [f"{label}: {self._flatten_item(value)}"]
+        if isinstance(value, (list, tuple)):
+            lines = [f"{label}:"]
+            lines.extend(f"- {self._flatten_item(item)}" for item in value if item)
+            return lines
+        if value is None or value == "":
+            return []
+        return [f"{label}: {value}"]
+
+    def _flatten_item(self, item: Any) -> str:
+        if not isinstance(item, (dict, list, tuple, str)) and hasattr(item, "__dict__"):
+            item = {
+                key: getattr(item, key)
+                for key in (
+                    "title",
+                    "platform",
+                    "priority",
+                    "status",
+                    "objective",
+                    "hook",
+                    "due_date",
+                    "estimated_minutes",
+                    "decision",
+                    "reasoning",
+                    "expected_outcome",
+                )
+                if hasattr(item, key) and getattr(item, key) not in (None, "")
+            }
+        if isinstance(item, dict):
+            title = str(item.get("title") or item.get("name") or "Elemento").strip()
+            details = []
+            for key in ("platform", "priority", "status", "objective", "hook", "due_date", "estimated_minutes"):
+                value = item.get(key)
+                if value not in (None, ""):
+                    details.append(f"{self._humanize_key(key)}: {value}")
+            return f"{title} - " + " - ".join(details) if details else title
+        if isinstance(item, (list, tuple)):
+            return " - ".join(str(part) for part in item if part not in (None, ""))
+        return str(item)
+
+    def _humanize_key(self, key: str) -> str:
+        labels = {
+            "summary": "Sintesi",
+            "title": "Titolo",
+            "wins": "Vittorie",
+            "blockers": "Blocchi",
+            "priorities": "Priorita",
+            "recommendations": "Raccomandazioni",
+            "analysis": "Analisi",
+            "plans": "Piano",
+            "ideas": "Idee",
+            "tasks": "Task",
+            "next_steps": "Prossimi passi",
+            "platform": "Canale",
+            "priority": "Priorita",
+            "status": "Stato",
+            "objective": "Obiettivo",
+            "hook": "Hook",
+            "due_date": "Scadenza",
+            "estimated_minutes": "Minuti",
+        }
+        return labels.get(key, key.replace("_", " ").strip().title())
+
+    def _strip_raw_structure_tokens(self, text: str) -> str:
+        if not re.search(r"[{}\[\]]", text):
+            return text
+        text = re.sub(r'["{}\\[\\]]', "", text)
+        text = re.sub(r"\bNone\b|\bnull\b", "", text)
+        text = re.sub(r"\bTrue\b|\bFalse\b|\btrue\b|\bfalse\b", "", text)
+        text = re.sub(r",\s*(?=[A-Za-z_ ]+:)", "\n", text)
+        text = re.sub(r":\s*\n", ":\n", text)
+        return text
+
+    def _clean_point(self, line: str) -> str:
+        line = re.sub(r"^[-\d. )]+", "", line).strip()
+        line = self._remove_internal_labels(line)
+        line = self._strip_raw_structure_tokens(line)
+        return " ".join(line.split())
+
+    def _dedupe_points(self, points: list[str]) -> list[str]:
+        deduped = []
+        seen = set()
+        for point in points:
+            key = point.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(point)
+        return deduped
+
+    def _starts_any_section_label(self, line: str) -> bool:
+        normalized = line.lower().strip()
+        return any(normalized.startswith(f"{label}:") for label in SECTION_LABELS)
+
+    def _looks_like_labeled_digest(self, text: str) -> bool:
+        lowered = text.lower()
+        return sum(1 for label in SECTION_LABELS if f"{label}:" in lowered) >= 2
+
+    def _needs_compact_title(self, user_message: str, title: str) -> bool:
+        normalized = user_message.lower()
+        operational_terms = ("briefing", "review", "task", "priorit", "idee", "contenut")
+        return len(title) > 140 and any(term in normalized for term in operational_terms)
+
+    def _digest_title(self, user_message: str) -> str:
+        normalized = user_message.lower()
+        if "briefing" in normalized or "giornalier" in normalized:
+            return "Briefing operativo pronto per oggi."
+        if "review" in normalized or "settimanal" in normalized:
+            return "Review operativa pronta."
+        if "task" in normalized or "priorit" in normalized:
+            return "Priorita operative aggiornate."
+        if "idee" in normalized or "contenut" in normalized:
+            return "Idee contenuto organizzate per l'azione."
+        return "Sintesi operativa pronta."
 
     def _remove_internal_labels(self, text: str) -> str:
         patterns = (

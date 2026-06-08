@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await reply_text(
         update,
-        (
+        format_static_reply(
+            "start",
             "Ciao, sono AI Brain. Scrivimi in linguaggio naturale: posso rispondere, "
             "recuperare memoria e attivare gli agenti quando serve.\n\n"
             "Esempi:\n"
@@ -39,7 +40,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await reply_text(
         update,
-        (
+        format_static_reply(
+            "help",
             "Comandi disponibili:\n"
             "/start - avvia il bot\n"
             "/help - mostra esempi\n\n"
@@ -79,7 +81,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
     except Exception:
         logger.exception("Telegram message handling failed")
-        await reply_text(update, "Ho avuto un errore mentre elaboravo il messaggio. Riprova tra poco.")
+        await reply_text(
+            update,
+            format_static_reply("errore telegram", "Ho avuto un errore mentre elaboravo il messaggio. Riprova tra poco."),
+        )
 
 
 def run_chat(message: str) -> dict:
@@ -94,6 +99,12 @@ def run_chat(message: str) -> dict:
         return result
     finally:
         db.close()
+
+
+def format_static_reply(message: str, text: str) -> str:
+    settings = get_settings()
+    formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
+    return formatter.format_telegram(message, text)
 
 
 async def reply_text(update: Update, text: str) -> None:
