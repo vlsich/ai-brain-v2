@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import re
 
 
@@ -40,12 +41,12 @@ class ResponseFormatter:
             plan_points = analysis_points[:2]
 
         sections = [
-            ("Risposta diretta", direct_answer),
+            ("Risposta Diretta", direct_answer),
             ("Analisi", analysis_points),
-            ("Piano operativo", plan_points),
-            ("Prossimo step", next_step),
+            ("Piano Operativo", plan_points),
+            ("Prossimo Passo", next_step),
         ]
-        formatted = self._render_sections(sections, markdown=markdown)
+        formatted = self._render_sections(sections, markdown=markdown, user_message=user_message)
         return self._truncate(formatted, max_chars, markdown=markdown)
 
     def quality_score(self, text: str) -> float:
@@ -62,9 +63,9 @@ class ResponseFormatter:
             score -= 0.2
         if text.count("#") > 2:
             score -= 0.1
-        if "Prossimo step" in text or "Prossimo passo:" in text:
+        if "Prossimo Passo" in text or "Prossimo step" in text or "Prossimo passo:" in text:
             score += 0.08
-        if "Piano operativo" in text or "Punti chiave:" in text or len(text) < 450:
+        if "Piano Operativo" in text or "Piano operativo" in text or "Punti chiave:" in text or len(text) < 450:
             score += 0.05
 
         return round(max(0.0, min(1.0, score)), 3)
@@ -196,9 +197,9 @@ class ResponseFormatter:
 
     def _render_simple(self, text: str, max_chars: int | None, markdown: bool) -> str:
         text = self._truncate(text.strip(), max_chars, markdown=False)
-        return self._escape_markdown_v2(text) if markdown else text
+        return self._escape_html(text) if markdown else text
 
-    def _render_sections(self, sections: list[tuple[str, str | list[str]]], markdown: bool) -> str:
+    def _render_sections(self, sections: list[tuple[str, str | list[str]]], markdown: bool, user_message: str) -> str:
         rendered_sections = []
         for title, content in sections:
             if isinstance(content, list):
@@ -206,16 +207,29 @@ class ResponseFormatter:
                 if not body_lines:
                     continue
                 if markdown:
-                    body = "\n".join(f"\\- {self._escape_markdown_v2(line)}" for line in body_lines)
+                    if title == "Piano Operativo":
+                        body = self._render_plan_lines(body_lines, user_message)
+                    elif title == "Analisi":
+                        body = "\n".join(self._escape_html(line) for line in body_lines)
+                    elif self._is_content_ideas_request(user_message):
+                        body = self._render_content_ideas(body_lines)
+                    else:
+                        body = "\n".join(f"• {self._escape_html(line)}" for line in body_lines)
                 else:
-                    body = "\n".join(f"- {line}" for line in body_lines)
+                    if title == "Piano Operativo":
+                        body = "\n".join(f"{index}. {line}" for index, line in enumerate(body_lines, start=1))
+                    else:
+                        body = "\n".join(f"- {line}" for line in body_lines)
             else:
                 if not content.strip():
                     continue
-                body = self._escape_markdown_v2(content) if markdown else content
+                body = self._escape_html(content) if markdown else content
 
             if markdown:
-                rendered_sections.append(f"*{self._escape_markdown_v2(title)}*\n{body}")
+                if title == "Analisi" and isinstance(content, list) and body:
+                    rendered_sections.append(f"<b>{self._escape_html(title)}</b>\n<blockquote>{body}</blockquote>")
+                else:
+                    rendered_sections.append(f"<b>{self._escape_html(title)}</b>\n{body}")
             else:
                 rendered_sections.append(f"{title}\n{body}")
 
@@ -232,11 +246,34 @@ class ResponseFormatter:
         if last_break > max_chars * 0.55:
             truncated = truncated[:last_break].rstrip()
         if markdown:
-            suffix = self._escape_markdown_v2(suffix)
+            suffix = self._escape_html(suffix)
         return f"{truncated}\n\n{suffix}"
 
-    def _escape_markdown_v2(self, text: str) -> str:
-        return re.sub(r"([_*\[\]()~`>#+\-=|{}.!])", r"\\\1", text)
+    def _render_plan_lines(self, lines: list[str], user_message: str) -> str:
+        if self._is_action_plan_request(user_message):
+            return "\n".join(f"☐ {self._escape_html(line)}" for line in lines)
+        return "\n".join(f"{index}. {self._escape_html(line)}" for index, line in enumerate(lines, start=1))
+
+    def _render_content_ideas(self, lines: list[str]) -> str:
+        rendered = []
+        for index, line in enumerate(lines, start=1):
+            title, _, detail = line.partition(":")
+            if detail:
+                rendered.append(f"{index}. <b>{self._escape_html(title.strip())}</b>\n   {self._escape_html(detail.strip())}")
+            else:
+                rendered.append(f"{index}. {self._escape_html(line)}")
+        return "\n\n".join(rendered)
+
+    def _is_content_ideas_request(self, message: str) -> bool:
+        normalized = message.lower()
+        return any(term in normalized for term in ("idee", "ideas", "format", "contenuti", "content ideas"))
+
+    def _is_action_plan_request(self, message: str) -> bool:
+        normalized = message.lower()
+        return any(term in normalized for term in ("checklist", "azione", "to do", "todo", "piano d'azione", "action plan"))
+
+    def _escape_html(self, text: str) -> str:
+        return html.escape(text, quote=False)
 
     def _remove_internal_labels(self, text: str) -> str:
         patterns = (
@@ -257,6 +294,21 @@ class ResponseFormatter:
         if len(stripped) < 8:
             return False
         noisy_markers = (
+            "brain state summary",
+            "questa sintesi rappresenta",
+            "identita:",
+            "identità:",
+            "business profile:",
+            "obiettivi e priorita:",
+            "obiettivi e priorità:",
+            "brand positioning:",
+            "content strategy:",
+            "preferenze:",
+            "user prefers",
+            "decisioni:",
+            "lessons:",
+            "tasks:",
+            "agent instructions:",
             "usa queste memorie",
             "non contraddire",
             "task:",

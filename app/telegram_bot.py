@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
@@ -95,10 +96,10 @@ async def reply_text(update: Update, text: str) -> None:
 
     for chunk in split_message(text):
         try:
-            await update.message.reply_text(chunk, parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
         except TelegramError:
-            logger.exception("Telegram markdown parsing failed, falling back to plain text")
-            await update.message.reply_text(strip_markdown_v2(chunk))
+            logger.exception("Telegram HTML parsing failed, falling back to plain text")
+            await update.message.reply_text(strip_html(chunk))
 
 
 def split_message(text: str) -> list[str]:
@@ -109,19 +110,45 @@ def split_message(text: str) -> list[str]:
 
     chunks = []
     current = ""
-    for line in text.splitlines(keepends=True):
-        if len(current) + len(line) > max_length:
-            chunks.append(current)
-            current = line
+    for block in text.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        candidate = f"{current}\n\n{block}".strip() if current else block
+        if len(candidate) > max_length:
+            if current:
+                chunks.append(current)
+            if len(block) > max_length:
+                chunks.extend(split_long_block(block, max_length))
+                current = ""
+            else:
+                current = block
         else:
-            current += line
+            current = candidate
     if current:
         chunks.append(current)
     return chunks
 
 
-def strip_markdown_v2(text: str) -> str:
-    return text.replace("\\", "")
+def split_long_block(block: str, max_length: int) -> list[str]:
+    lines = block.splitlines()
+    chunks = []
+    current = ""
+    for line in lines:
+        candidate = f"{current}\n{line}".strip() if current else line
+        if len(candidate) > max_length:
+            if current:
+                chunks.append(current)
+            current = line[:max_length]
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def strip_html(text: str) -> str:
+    return re.sub(r"</?[^>]+>", "", text)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
