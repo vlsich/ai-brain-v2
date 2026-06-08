@@ -98,6 +98,13 @@ class ResponseFormatter:
             "finance",
             "finanza",
             "brand",
+            "task",
+            "priorità",
+            "priorita",
+            "briefing",
+            "review",
+            "decisione",
+            "decisioni",
         )
         if any(term in normalized for term in strategic_terms):
             return False

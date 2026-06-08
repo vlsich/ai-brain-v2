@@ -29,7 +29,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "Esempi:\n"
             "- Chi sono?\n"
             "- Creami una strategia TikTok per AI Brain\n"
-            "- Proponi 5 contenuti LinkedIn"
+            "- Proponi 5 contenuti LinkedIn\n"
+            "- Briefing giornaliero\n"
+            "- Quali sono le priorita?"
         ),
     )
 
@@ -44,7 +46,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "Puoi scrivere messaggi semplici o task complessi:\n"
             "- Cosa ricordi di me?\n"
             "- Analizza questo mercato e crea un piano contenuti\n"
-            "- Crea 3 script TikTok coerenti con la mia strategia"
+            "- Crea 3 script TikTok coerenti con la mia strategia\n"
+            "- Cosa dovrei fare oggi?\n"
+            "- Review settimanale\n"
+            "- Salva questa decisione: focus su TikTok per 30 giorni\n"
+            "- Segna task completato 3"
         ),
     )
 

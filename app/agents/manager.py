@@ -195,8 +195,10 @@ class ManagerAgent:
                             "output necessari e sintetizza una risposta finale chiara, breve, "
                             "utile e orientata all'azione. Non sommare tutto: seleziona cio "
                             "che serve, elimina ridondanza e genericita. Mantieni focus sul business "
-                            "finance/personal brand di Michele quando pertinente. Rispetta sempre "
-                            "i vincoli espliciti del task corrente. "
+                            "finance/personal brand di Michele quando pertinente. Quando il task ha "
+                            "implicazioni operative, prioritizza le azioni, proponi task concreti, "
+                            "raccomandazioni e priorita settimanali. Rispetta sempre i vincoli espliciti "
+                            "del task corrente. "
                             f"{GLOBAL_AGENT_RULES}"
                             f"{memory_section}"
                         ),
@@ -221,7 +223,8 @@ class ManagerAgent:
             f"{memory_note}"
             "Sintesi:\n"
             "Il task e stato processato dagli agenti selezionati. Usa la ricerca come base "
-            "strategica e il contenuto come bozza operativa pronta da rifinire.\n\n"
+            "strategica e il contenuto come bozza operativa pronta da rifinire. "
+            "Prioritizza azioni legate a finance, contenuti, audience e monetizzazione.\n\n"
             f"Dettagli agenti:\n{sections}"
         )
 

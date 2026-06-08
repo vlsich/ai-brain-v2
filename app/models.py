@@ -115,3 +115,65 @@ class ContentTask(Base):
     priority: Mapped[int] = mapped_column(Integer, default=3, nullable=False, index=True)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ProductivityTask(Base):
+    __tablename__ = "business_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    category: Mapped[str] = mapped_column(String(64), default="business", nullable=False, index=True)
+    priority: Mapped[str] = mapped_column(String(32), default="medium", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    estimated_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    related_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_project: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+
+
+class Decision(Base):
+    __tablename__ = "decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    context: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    decision: Mapped[str] = mapped_column(Text, nullable=False)
+    reasoning: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    expected_outcome: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    related_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_project: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+
+
+class DailyReview(Base):
+    __tablename__ = "daily_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    wins: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    blockers: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    priorities: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    recommendations: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    related_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_project: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+
+
+class WeeklyReview(Base):
+    __tablename__ = "weekly_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    progress: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    completed_tasks: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    decisions: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    alignment: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    recommendations: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    related_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_project: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)

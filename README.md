@@ -17,6 +17,8 @@ Sistema multi-agente con memoria persistente locale.
 - `ContentAgent`: produce script, post e contenuti social.
 - `FinanceContentStrategist`: crea strategie contenuto e crescita per il business finance/personal brand di Michele.
 - `ContentPlannerAgent`: crea piani editoriali settimanali, idee contenuto e task di crescita multi-platform.
+- `DailyReviewAgent`: genera briefing giornalieri su task, decisioni, memoria e priorita business.
+- `WeeklyReviewAgent`: produce review settimanali su progressi, task completati, decisioni e allineamento agli obiettivi.
 - `MemoryCuratorAgent`: dopo ogni task decide cosa salvare nella memoria a lungo termine.
 
 ## Setup
@@ -165,6 +167,89 @@ Esempi di messaggi:
 - `Creami il piano editoriale della settimana`
 - `Dammi idee contenuto`
 - `Quali task devo fare oggi?`
+- `Briefing giornaliero`
+- `Review settimanale`
+- `Mostrami le priorita`
+- `Salva questa decisione: focus su TikTok per 30 giorni`
+- `Segna task completato 3`
+
+## Proactive Productivity Layer
+
+AI Brain include un layer produttivo per trasformare memoria, obiettivi e decisioni in azioni operative.
+
+Componenti:
+
+- `TaskEngine`: crea, aggiorna, completa e prioritizza task business.
+- `DecisionJournal`: salva decisioni strategiche di Michele.
+- `DailyReviewAgent`: genera briefing giornalieri.
+- `WeeklyReviewAgent`: genera review settimanali.
+
+Ogni task, decisione e review salva metadati relazionali per il futuro Knowledge Graph:
+
+- `related_goal`
+- `related_project`
+- `related_topic`
+
+Il layer usa `Brain State Summary` e memory retrieval, con focus su finanza, investing, content creation, personal brand growth, audience building e monetizzazione.
+
+Creare un task:
+
+```bash
+curl -X POST http://127.0.0.1:8000/productivity/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title":"Preparare contenuto TikTok su errore comune negli investimenti",
+    "description":"Hook, struttura e CTA verso newsletter.",
+    "category":"finance_content",
+    "priority":"high",
+    "estimated_minutes":45,
+    "related_goal":"audience building",
+    "related_project":"personal brand finance",
+    "related_topic":"investing"
+  }'
+```
+
+Leggere task pendenti:
+
+```bash
+curl http://127.0.0.1:8000/productivity/tasks/pending
+```
+
+Leggere priorita alte:
+
+```bash
+curl http://127.0.0.1:8000/productivity/tasks/high-priority
+```
+
+Completare un task:
+
+```bash
+curl -X POST http://127.0.0.1:8000/productivity/tasks/1/complete
+```
+
+Salvare una decisione:
+
+```bash
+curl -X POST http://127.0.0.1:8000/decisions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title":"Focus TikTok per 30 giorni",
+    "decision":"Michele concentra la produzione short-form su TikTok per validare format finance.",
+    "reasoning":"Serve velocita di feedback e crescita audience.",
+    "expected_outcome":"Capire quali hook e format generano piu retention e lead.",
+    "related_goal":"audience building",
+    "related_project":"personal brand finance",
+    "related_topic":"TikTok"
+  }'
+```
+
+Leggere decisioni e review:
+
+```bash
+curl http://127.0.0.1:8000/decisions
+curl http://127.0.0.1:8000/reviews/daily
+curl http://127.0.0.1:8000/reviews/weekly
+```
 
 ## Editorial Planning
 
@@ -217,6 +302,10 @@ Tabelle principali:
 - `editorial_plans`: contenuti pianificati.
 - `content_ideas`: idee contenuto salvate.
 - `content_tasks`: task operativi per produzione e crescita.
+- `business_tasks`: task operativi del Productivity Layer.
+- `decisions`: decision journal strategico.
+- `daily_reviews`: briefing giornalieri salvati.
+- `weekly_reviews`: review settimanali salvate.
 
 Categorie di memoria a lungo termine:
 

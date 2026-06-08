@@ -12,10 +12,13 @@ from sqlalchemy.orm import Session
 from app.brain_core import BrainCore
 from app.config import get_settings
 from app.database import SessionLocal, get_db, init_db
+from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.memory import Memory
+from app.models import DailyReview, WeeklyReview
 from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
+from app.task_engine import TaskEngine
 
 
 settings = get_settings()
@@ -117,6 +120,104 @@ class EditorialPlanResponse(BaseModel):
     ideas: list[EditorialItemResponse]
     tasks: list[EditorialItemResponse]
     memories_used: list[RetrievedMemoryResponse] = Field(default_factory=list)
+
+
+class ProductivityTaskCreate(BaseModel):
+    title: str = Field(..., min_length=3)
+    description: str = ""
+    category: str = "business"
+    priority: str = "medium"
+    estimated_minutes: int = Field(default=30, ge=5, le=480)
+    due_date: Optional[datetime] = None
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class ProductivityTaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    estimated_minutes: Optional[int] = Field(default=None, ge=5, le=480)
+    due_date: Optional[datetime] = None
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class ProductivityTaskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str
+    category: str
+    priority: str
+    status: str
+    estimated_minutes: int
+    due_date: Optional[datetime] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class DecisionCreate(BaseModel):
+    title: str = Field(..., min_length=3)
+    context: str = ""
+    decision: str = Field(..., min_length=3)
+    reasoning: str = ""
+    expected_outcome: str = ""
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class DecisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    context: str
+    decision: str
+    reasoning: str
+    expected_outcome: str
+    created_at: datetime
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class DailyReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    wins: str
+    blockers: str
+    priorities: str
+    recommendations: str
+    created_at: datetime
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class WeeklyReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    progress: str
+    completed_tasks: str
+    decisions: str
+    alignment: str
+    recommendations: str
+    created_at: datetime
+    related_goal: Optional[str] = None
+    related_project: Optional[str] = None
+    related_topic: Optional[str] = None
 
 
 @app.on_event("startup")
@@ -250,3 +351,54 @@ def list_editorial_tasks(
 ) -> list:
     calendar = EditorialCalendar(db)
     return calendar.list_tasks(status=status, platform=platform, limit=limit)
+
+
+@app.post("/productivity/tasks", response_model=ProductivityTaskResponse)
+def create_productivity_task(payload: ProductivityTaskCreate, db: Session = Depends(get_db)):
+    return TaskEngine(db).create_task(**payload.model_dump())
+
+
+@app.patch("/productivity/tasks/{task_id}", response_model=ProductivityTaskResponse)
+def update_productivity_task(task_id: int, payload: ProductivityTaskUpdate, db: Session = Depends(get_db)):
+    task = TaskEngine(db).update_task(task_id, **payload.model_dump(exclude_unset=True))
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@app.post("/productivity/tasks/{task_id}/complete", response_model=ProductivityTaskResponse)
+def complete_productivity_task(task_id: int, db: Session = Depends(get_db)):
+    task = TaskEngine(db).complete_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@app.get("/productivity/tasks/pending", response_model=list[ProductivityTaskResponse])
+def list_pending_productivity_tasks(limit: int = 20, db: Session = Depends(get_db)):
+    return TaskEngine(db).list_pending_tasks(limit=limit)
+
+
+@app.get("/productivity/tasks/high-priority", response_model=list[ProductivityTaskResponse])
+def list_high_priority_productivity_tasks(limit: int = 10, db: Session = Depends(get_db)):
+    return TaskEngine(db).list_high_priority_tasks(limit=limit)
+
+
+@app.post("/decisions", response_model=DecisionResponse)
+def create_decision(payload: DecisionCreate, db: Session = Depends(get_db)):
+    return DecisionJournal(db).save_decision(**payload.model_dump())
+
+
+@app.get("/decisions", response_model=list[DecisionResponse])
+def list_decisions(limit: int = 10, db: Session = Depends(get_db)):
+    return DecisionJournal(db).latest_decisions(limit=limit)
+
+
+@app.get("/reviews/daily", response_model=list[DailyReviewResponse])
+def list_daily_reviews(limit: int = 10, db: Session = Depends(get_db)):
+    return db.query(DailyReview).order_by(DailyReview.created_at.desc()).limit(limit).all()
+
+
+@app.get("/reviews/weekly", response_model=list[WeeklyReviewResponse])
+def list_weekly_reviews(limit: int = 10, db: Session = Depends(get_db)):
+    return db.query(WeeklyReview).order_by(WeeklyReview.created_at.desc()).limit(limit).all()
