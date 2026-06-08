@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.brain_core import BrainCore
 from app.config import get_settings
 from app.database import SessionLocal, get_db, init_db
+from app.editorial_calendar import EditorialCalendar
 from app.memory import Memory
 from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
@@ -85,6 +86,37 @@ class BrainSeedMemory(BaseModel):
 
 class BrainSeedRequest(BaseModel):
     memories: list[BrainSeedMemory] = Field(default_factory=list)
+
+
+class EditorialPlanRequest(BaseModel):
+    prompt: str = Field(
+        default="Crea il piano editoriale della settimana per il personal brand finance di Michele",
+        min_length=3,
+    )
+
+
+class EditorialItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    platform: str
+    content_type: str
+    objective: str
+    target_audience: str
+    hook: str
+    status: str
+    priority: int
+    due_date: Optional[datetime] = None
+    created_at: datetime
+
+
+class EditorialPlanResponse(BaseModel):
+    summary: str
+    plans: list[EditorialItemResponse]
+    ideas: list[EditorialItemResponse]
+    tasks: list[EditorialItemResponse]
+    memories_used: list[RetrievedMemoryResponse] = Field(default_factory=list)
 
 
 @app.on_event("startup")
@@ -187,3 +219,34 @@ def get_brain_state(db: Session = Depends(get_db)) -> dict:
 def seed_brain(payload: BrainSeedRequest, db: Session = Depends(get_db)) -> dict:
     memories = [memory.model_dump() for memory in payload.memories] if payload.memories else None
     return BrainCore(db).seed(memories=memories)
+
+
+@app.post("/editorial/plan", response_model=EditorialPlanResponse)
+def create_editorial_plan(payload: EditorialPlanRequest, db: Session = Depends(get_db)) -> dict:
+    calendar = EditorialCalendar(db)
+    try:
+        return calendar.create_weekly_plan(payload.prompt)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/editorial/ideas", response_model=list[EditorialItemResponse])
+def list_editorial_ideas(
+    status: Optional[str] = None,
+    platform: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+) -> list:
+    calendar = EditorialCalendar(db)
+    return calendar.list_ideas(status=status, platform=platform, limit=limit)
+
+
+@app.get("/editorial/tasks", response_model=list[EditorialItemResponse])
+def list_editorial_tasks(
+    status: Optional[str] = None,
+    platform: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+) -> list:
+    calendar = EditorialCalendar(db)
+    return calendar.list_tasks(status=status, platform=platform, limit=limit)

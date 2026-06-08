@@ -67,3 +67,51 @@ class BrainState(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+class EditorialPlan(Base):
+    __tablename__ = "editorial_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    target_audience: Mapped[str] = mapped_column(String(255), nullable=False)
+    hook: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="planned", nullable=False, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=3, nullable=False, index=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ContentIdea(Base):
+    __tablename__ = "content_ideas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    target_audience: Mapped[str] = mapped_column(String(255), nullable=False)
+    hook: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="idea", nullable=False, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=3, nullable=False, index=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ContentTask(Base):
+    __tablename__ = "content_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    target_audience: Mapped[str] = mapped_column(String(255), nullable=False)
+    hook: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="todo", nullable=False, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=3, nullable=False, index=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

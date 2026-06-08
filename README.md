@@ -16,6 +16,7 @@ Sistema multi-agente con memoria persistente locale.
 - `ResearchAgent`: produce analisi, punti chiave e sintesi operative.
 - `ContentAgent`: produce script, post e contenuti social.
 - `FinanceContentStrategist`: crea strategie contenuto e crescita per il business finance/personal brand di Michele.
+- `ContentPlannerAgent`: crea piani editoriali settimanali, idee contenuto e task di crescita multi-platform.
 - `MemoryCuratorAgent`: dopo ogni task decide cosa salvare nella memoria a lungo termine.
 
 ## Setup
@@ -128,6 +129,14 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"Crea una content strategy TikTok finance per il personal brand di Michele"}'
 ```
 
+Esempio piano editoriale via chat:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Creami il piano editoriale della settimana"}'
+```
+
 ## Telegram Bot
 
 Telegram puo essere usato come interfaccia principale di AI Brain. Ogni messaggio testuale viene inviato alla stessa logica di `POST /chat`, quindi usa retrieval, agenti, memoria persistente e Memory Curator.
@@ -153,6 +162,48 @@ Esempi di messaggi:
 - `Cosa ricordi di me?`
 - `Creami una strategia TikTok per AI Brain`
 - `Proponi 5 contenuti LinkedIn coerenti con la mia strategia`
+- `Creami il piano editoriale della settimana`
+- `Dammi idee contenuto`
+- `Quali task devo fare oggi?`
+
+## Editorial Planning
+
+Il sistema editoriale genera e salva piani, idee e task per il business finance/personal brand di Michele. Usa `Brain State Summary` e memory retrieval per mantenere coerenza con identita, obiettivi, posizionamento e strategia contenuti.
+
+Focus operativo:
+
+- finanza personale
+- educazione finanziaria
+- investimenti
+- personal brand finance
+- crescita multi-platform
+- conversione audience
+
+Creare un piano settimanale:
+
+```bash
+curl -X POST http://127.0.0.1:8000/editorial/plan \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Crea il piano editoriale della settimana per TikTok, Instagram e YouTube"}'
+```
+
+Leggere idee contenuto:
+
+```bash
+curl http://127.0.0.1:8000/editorial/ideas
+```
+
+Filtrare per piattaforma o stato:
+
+```bash
+curl "http://127.0.0.1:8000/editorial/ideas?platform=TikTok&status=idea"
+```
+
+Leggere task editoriali:
+
+```bash
+curl http://127.0.0.1:8000/editorial/tasks
+```
 
 ## Memoria
 
@@ -163,6 +214,9 @@ Tabelle principali:
 - `tasks`: task ricevuti e risposta finale.
 - `agent_results`: output prodotti dai singoli agenti.
 - `long_term_memory`: memoria strutturata persistente.
+- `editorial_plans`: contenuti pianificati.
+- `content_ideas`: idee contenuto salvate.
+- `content_tasks`: task operativi per produzione e crescita.
 
 Categorie di memoria a lungo termine:
 

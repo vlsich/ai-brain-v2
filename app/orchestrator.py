@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import logging
+import json
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.agents.content import ContentAgent
+from app.agents.content_planner import ContentPlannerAgent
 from app.agents.finance_strategist import FinanceContentStrategist
 from app.agents.manager import ManagerAgent
 from app.agents.memory_curator import MemoryCuratorAgent
 from app.agents.research import ResearchAgent
 from app.brain_core import BrainCore
 from app.config import get_settings
+from app.editorial_calendar import EditorialCalendar
 from app.memory import Memory
 
 
@@ -26,8 +29,10 @@ class Orchestrator:
         self.manager = ManagerAgent(self.settings)
         self.research = ResearchAgent(self.settings)
         self.finance_strategist = FinanceContentStrategist(self.settings)
+        self.content_planner = ContentPlannerAgent(self.settings)
         self.content = ContentAgent(self.settings)
         self.memory_curator = MemoryCuratorAgent(self.settings)
+        self.editorial_calendar = EditorialCalendar(db)
 
     def handle_task(self, prompt: str) -> dict:
         return self._run(prompt, chat_mode=False)
@@ -92,11 +97,23 @@ class Orchestrator:
                 results["finance_strategist"] = finance_output
                 self.memory.save_agent_result(task.id, "finance_strategist", finance_output)
 
+            if "content_planner" in agents_to_use:
+                planner_payload = self.content_planner.plan_week(
+                    prompt,
+                    brain_context=brain_context,
+                    memory_context=memory_context,
+                )
+                saved_editorial = self.editorial_calendar.save_planner_payload(planner_payload)
+                planner_output = self._format_editorial_output(planner_payload, saved_editorial)
+                results["content_planner"] = planner_output
+                self.memory.save_agent_result(task.id, "content_planner", planner_output)
+
             if "content" in agents_to_use:
                 research_context = results.get("research")
                 finance_context = results.get("finance_strategist")
+                planner_context = results.get("content_planner")
                 combined_context = "\n\n".join(
-                    context for context in (research_context, finance_context) if context
+                    context for context in (research_context, finance_context, planner_context) if context
                 )
                 content_output = self.content.run(
                     prompt,
@@ -173,6 +190,16 @@ class Orchestrator:
         if self.brain_core.should_update_after_task(prompt, agents_to_use, saved_memories_count):
             state = self.brain_core.update_state_summary()
             logger.info("Brain state updated version=%s", state["version"])
+
+    def _format_editorial_output(self, payload: dict[str, Any], saved_editorial: dict[str, Any]) -> str:
+        summary = saved_editorial.get("summary", "Piano editoriale aggiornato.")
+        compact_payload = {
+            "summary": summary,
+            "plans": payload.get("plans", [])[:6],
+            "ideas": payload.get("ideas", [])[:8],
+            "tasks": payload.get("tasks", [])[:8],
+        }
+        return json.dumps(compact_payload, ensure_ascii=False, indent=2)
 
     def _serialize_retrieved_memories(self, memories: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [

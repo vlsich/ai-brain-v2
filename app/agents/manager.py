@@ -24,6 +24,9 @@ class ManagerAgent:
             return []
 
         normalized = task.lower()
+        if self._is_editorial_planning_task(normalized):
+            return ["content_planner"]
+
         if self._is_simple_content_task(normalized):
             return ["content"]
 
@@ -64,8 +67,30 @@ class ManagerAgent:
             "tiktok finance",
             "multi-platform",
         )
+        editorial_keywords = (
+            "piano editoriale",
+            "calendario editoriale",
+            "editorial plan",
+            "piano contenuti",
+            "piano dei contenuti",
+            "piano della settimana",
+            "piano settimanale",
+            "weekly plan",
+            "weekly content",
+            "idee contenuto",
+            "idee contenuti",
+            "idee per contenuti",
+            "content ideas",
+            "task di oggi",
+            "task devo fare",
+            "quali task",
+            "cosa devo pubblicare",
+            "programmazione contenuti",
+        )
 
         agents: list[str] = []
+        if any(keyword in normalized for keyword in editorial_keywords):
+            agents.append("content_planner")
         if any(keyword in normalized for keyword in finance_strategy_keywords):
             agents.append("finance_strategist")
         if any(keyword in normalized for keyword in research_keywords):
@@ -74,6 +99,24 @@ class ManagerAgent:
             agents.append("content")
 
         return agents or ["research", "content"]
+
+    def _is_editorial_planning_task(self, normalized: str) -> bool:
+        editorial_terms = (
+            "piano editoriale",
+            "calendario editoriale",
+            "piano contenuti",
+            "piano dei contenuti",
+            "piano della settimana",
+            "piano settimanale",
+            "idee contenuto",
+            "idee contenuti",
+            "idee per contenuti",
+            "task di oggi",
+            "task devo fare",
+            "quali task",
+            "cosa devo pubblicare",
+        )
+        return any(term in normalized for term in editorial_terms)
 
     def _is_simple_content_task(self, normalized: str) -> bool:
         simple_action = any(word in normalized for word in ("scrivi", "crea", "fammi", "prepara"))
