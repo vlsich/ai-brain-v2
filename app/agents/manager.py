@@ -158,6 +158,9 @@ class ManagerAgent:
                         "role": "system",
                         "content": (
                             "Sei il Manager Agent di AI Brain in modalita chat. "
+                            "Comunichi come un executive team professionale: prima sintesi, poi analisi, "
+                            "raccomandazioni e prossime azioni. Ogni risposta deve chiarire cosa sta "
+                            "succedendo, perche conta e cosa Michele dovrebbe fare dopo. "
                             "Capisci il vero obiettivo dell'utente e rispondi direttamente "
                             "quando non servono altri agenti. Se mancano dati essenziali, "
                             "fai una sola domanda di chiarimento. Usa solo memorie rilevanti; "
@@ -197,7 +200,8 @@ class ManagerAgent:
                         "content": (
                             "Sei il Manager Agent. Capisci il vero obiettivo, usa solo gli "
                             "output necessari e sintetizza una risposta finale chiara, breve, "
-                            "utile e orientata all'azione. Non sommare tutto: seleziona cio "
+                            "utile e orientata all'azione. Comunica come un executive team: Executive Summary, "
+                            "Analysis, Recommendations, Next Actions. Non sommare tutto: seleziona cio "
                             "che serve, elimina ridondanza e genericita. Mantieni focus sul business "
                             "finance/personal brand di Michele quando pertinente. Quando il task ha "
                             "implicazioni operative, prioritizza le azioni, proponi task concreti, "

@@ -38,6 +38,14 @@ SECTION_TITLES = {
 }
 
 
+EXECUTIVE_SECTION_TITLES = {
+    "executive_summary": "Executive Summary",
+    "analysis": "Analysis",
+    "recommendations": "Recommendations",
+    "next_actions": "Next Actions",
+}
+
+
 class ResponseFormatter:
     def __init__(self, telegram_max_chars: int = 2500):
         self.telegram_max_chars = telegram_max_chars
@@ -53,8 +61,14 @@ class ResponseFormatter:
     def format_task_list(self, tasks: Any, markdown: bool = True) -> str:
         points = self._coerce_points(tasks)
         if not points:
-            return self._render_section("priorities", ["Nessun task operativo disponibile."], markdown, numbered=True)
-        return self._render_section("priorities", points, markdown, numbered=True)
+            points = ["Nessun task operativo disponibile."]
+        return self._render_executive_response(
+            summary="La lista task e stata consolidata in priorita operative.",
+            analysis=points,
+            recommendations=["Dai precedenza ai task piu vicini a obiettivi, monetizzazione e crescita audience."],
+            next_actions=points[:3],
+            markdown=markdown,
+        )
 
     def format_briefing(
         self,
@@ -66,26 +80,27 @@ class ResponseFormatter:
         next_steps: Any = None,
         markdown: bool = True,
     ) -> str:
-        sections = [
-            self._render_section("daily_briefing", ["Briefing operativo pronto per oggi."], markdown),
-            self._render_section("wins", self._coerce_points(wins), markdown),
-            self._render_section("blockers", self._coerce_points(blockers), markdown),
-            self._render_section("priorities", self._coerce_points(priorities), markdown, numbered=True),
-            self._render_section("analysis", self._coerce_points(analysis), markdown),
-            self._render_section("recommendations", self._coerce_points(recommendations), markdown),
-            self._render_section("next_steps", self._coerce_points(next_steps), markdown),
-        ]
-        return self._join_sections(sections)
+        analysis_points = []
+        analysis_points.extend([f"Win: {point}" for point in self._coerce_points(wins, limit=3)])
+        analysis_points.extend([f"Blocco: {point}" for point in self._coerce_points(blockers, limit=3)])
+        analysis_points.extend(self._coerce_points(analysis, limit=3))
+        priority_points = self._coerce_points(priorities, limit=5)
+        return self._render_executive_response(
+            summary="Il briefing evidenzia cosa sta avanzando, cosa blocca il lavoro e quali priorita meritano attenzione oggi.",
+            analysis=analysis_points or priority_points,
+            recommendations=self._coerce_points(recommendations, limit=4) or ["Proteggi il focus sui task che avvicinano obiettivi business e personal brand."],
+            next_actions=self._coerce_points(next_steps, limit=4) or priority_points[:3],
+            markdown=markdown,
+        )
 
     def format_review(self, review: Any, markdown: bool = True) -> str:
         payload = review if isinstance(review, dict) else {}
-        return self._join_sections(
-            [
-                self._render_section("analysis", self._coerce_points(payload.get("progress") or payload.get("alignment") or review), markdown),
-                self._render_section("priorities", self._coerce_points(payload.get("completed_tasks")), markdown, numbered=True),
-                self._render_section("recommendations", self._coerce_points(payload.get("recommendations")), markdown),
-                self._render_section("next_steps", ["Scegli la priorita principale della prossima settimana e trasformala in 3 task eseguibili."], markdown),
-            ]
+        return self._render_executive_response(
+            summary="La review sintetizza progressi, decisioni e allineamento rispetto agli obiettivi.",
+            analysis=self._coerce_points(payload.get("progress") or payload.get("alignment") or review, limit=5),
+            recommendations=self._coerce_points(payload.get("recommendations"), limit=4) or ["Riduci dispersione e concentra la prossima settimana su un risultato misurabile."],
+            next_actions=["Scegli la priorita principale della prossima settimana.", "Trasformala in 3 task eseguibili.", "Collega ogni task a un obiettivo attivo."],
+            markdown=markdown,
         )
 
     def format_decision(self, decision: Any, markdown: bool = True) -> str:
@@ -96,12 +111,12 @@ class ResponseFormatter:
             payload.get("reasoning"),
             payload.get("expected_outcome"),
         ]
-        return self._join_sections(
-            [
-                self._render_section("analysis", self._coerce_points(analysis), markdown),
-                self._render_section("recommendations", self._coerce_points(payload.get("recommendations")), markdown),
-                self._render_section("next_steps", ["Rivedi questa decisione quando cambiano dati, priorita o risultati."], markdown),
-            ]
+        return self._render_executive_response(
+            summary="La decisione e stata trasformata in un punto operativo da monitorare.",
+            analysis=self._coerce_points(analysis, limit=5),
+            recommendations=self._coerce_points(payload.get("recommendations"), limit=4) or ["Mantieni la decisione collegata a un obiettivo e verifica se produce il risultato atteso."],
+            next_actions=["Definisci il primo task collegato alla decisione.", "Rivedi la decisione quando cambiano dati, priorita o risultati."],
+            markdown=markdown,
         )
 
     def format_content_plan(self, plan: Any, markdown: bool = True) -> str:
@@ -112,17 +127,23 @@ class ResponseFormatter:
         analysis_items.extend(self._coerce_points(payload.get("plans"))[:4])
         analysis_items.extend(self._coerce_points(payload.get("ideas"))[:5])
         task_items = self._coerce_points(payload.get("tasks"))[:6]
-        return self._join_sections(
-            [
-                self._render_section("analysis", analysis_items or self._coerce_points(plan), markdown),
-                self._render_section("priorities", task_items, markdown, numbered=True),
-                self._render_section("recommendations", ["Pubblica prima il contenuto con hook piu chiaro e CTA piu vicina alla monetizzazione."], markdown),
-                self._render_section("next_steps", ["Scegli un contenuto e chiedimi di trasformarlo in script pronto da registrare."], markdown),
-            ]
+        return self._render_executive_response(
+            summary="Il piano contenuti e stato convertito in un framework operativo da Content Director.",
+            analysis=analysis_items or self._coerce_points(plan, limit=5),
+            recommendations=["Pubblica prima il contenuto con hook piu chiaro e CTA piu vicina alla monetizzazione.", "Mantieni focus su finance, fiducia e conversione audience."],
+            next_actions=task_items[:4] or ["Scegli un contenuto e chiedimi di trasformarlo in script pronto da registrare."],
+            markdown=markdown,
         )
 
     def format_recommendations(self, recommendations: Any, markdown: bool = True) -> str:
-        return self._render_section("recommendations", self._coerce_points(recommendations), markdown)
+        points = self._coerce_points(recommendations)
+        return self._render_executive_response(
+            summary="Le raccomandazioni sono state sintetizzate in decisioni operative.",
+            analysis=points,
+            recommendations=points,
+            next_actions=points[:3],
+            markdown=markdown,
+        )
 
     def _format(self, user_message: str, raw_reply: str, max_chars: int | None, markdown: bool) -> str:
         parsed = self._extract_structured(raw_reply)
@@ -133,18 +154,16 @@ class ResponseFormatter:
 
         cleaned = self._clean_text(raw_reply)
         if not cleaned:
-            return self._render_simple(
-                "Non ho abbastanza informazioni per rispondere bene. Puoi darmi un po' piu di contesto?",
-                max_chars=max_chars,
+            formatted = self._render_executive_response(
+                summary="Non ci sono abbastanza informazioni per una risposta affidabile.",
+                analysis=["Il contesto disponibile non basta per distinguere obiettivo, vincoli e prossima azione."],
+                recommendations=["Chiedere un solo dato mancante prima di procedere."],
+                next_actions=["Dimmi l'obiettivo principale o il risultato che vuoi ottenere."],
                 markdown=markdown,
             )
+            return self._truncate(formatted, max_chars, markdown=markdown)
 
-        if self._is_simple_request(user_message):
-            return self._render_simple(
-                self._first_useful_sentences(cleaned, max_sentences=3),
-                max_chars=max_chars,
-                markdown=markdown,
-            )
+        role = self._executive_role(user_message)
 
         direct_answer = self._first_useful_sentences(cleaned, max_sentences=2)
         if (
@@ -163,21 +182,20 @@ class ResponseFormatter:
         if not plan_points:
             plan_points = analysis_points[:2]
 
-        sections = []
-        if self._is_briefing_request(user_message):
-            sections.append(("Daily Briefing", direct_answer))
-        if wins_points:
-            sections.append(("Wins", wins_points))
-        if blocker_points:
-            sections.append(("Blockers", blocker_points))
-        sections.append(("Priorities", priority_points or plan_points))
         combined_analysis = self._dedupe_points(([direct_answer] if not self._is_briefing_request(user_message) else []) + analysis_points)
-        sections.append(("Analysis", combined_analysis))
+        if wins_points:
+            combined_analysis.extend([f"Win: {point}" for point in wins_points])
+        if blocker_points:
+            combined_analysis.extend([f"Blocco: {point}" for point in blocker_points])
         recommendations = self._extract_label_points(cleaned, labels=("raccomandazioni", "raccomandazione", "recommendations"), limit=4)
-        if recommendations:
-            sections.append(("Recommendations", recommendations))
-        sections.append(("Next Steps", next_step))
-        formatted = self._render_sections(sections, markdown=markdown, user_message=user_message)
+
+        formatted = self._render_executive_response(
+            summary=self._executive_summary(user_message, direct_answer, role),
+            analysis=combined_analysis or [direct_answer],
+            recommendations=recommendations or self._executive_recommendations(user_message, role),
+            next_actions=(priority_points or plan_points or [next_step])[:4],
+            markdown=markdown,
+        )
         return self._truncate(formatted, max_chars, markdown=markdown)
 
     def quality_score(self, text: str) -> float:
@@ -233,6 +251,100 @@ class ResponseFormatter:
             return self.format_recommendations(payload.get("recommendations") or payload.get("raccomandazioni"), markdown=markdown)
 
         return ""
+
+    def _render_executive_response(
+        self,
+        summary: Any,
+        analysis: Any,
+        recommendations: Any,
+        next_actions: Any,
+        markdown: bool,
+    ) -> str:
+        return self._join_sections(
+            [
+                self._render_executive_section("executive_summary", summary, markdown, numbered=False, paragraph=True),
+                self._render_executive_section("analysis", analysis, markdown),
+                self._render_executive_section("recommendations", recommendations, markdown),
+                self._render_executive_section("next_actions", next_actions, markdown, numbered=True),
+            ]
+        )
+
+    def _render_executive_section(
+        self,
+        section_key: str,
+        content: Any,
+        markdown: bool,
+        numbered: bool = False,
+        paragraph: bool = False,
+    ) -> str:
+        points = self._dedupe_points(self._coerce_points(content, limit=6))
+        if not points:
+            points = [self._fallback_section_point(section_key)]
+
+        title = EXECUTIVE_SECTION_TITLES[section_key]
+        if paragraph:
+            body = " ".join(points[:2])
+            body = self._escape_html(body) if markdown else body
+        elif numbered:
+            body = "\n".join(
+                f"{index}. {self._escape_html(point) if markdown else point}"
+                for index, point in enumerate(points[:5], start=1)
+            )
+        else:
+            body = "\n".join(f"• {self._escape_html(point) if markdown else point}" for point in points[:5])
+
+        if markdown:
+            return f"<b>{self._escape_html(title)}</b>\n{body}"
+        return f"{title}\n{body}"
+
+    def _fallback_section_point(self, section_key: str) -> str:
+        fallbacks = {
+            "executive_summary": "Il punto e stato sintetizzato in forma operativa.",
+            "analysis": "Il contesto va letto rispetto a obiettivi, vincoli e impatto business.",
+            "recommendations": "Concentrare l'azione su cio che produce avanzamento misurabile.",
+            "next_actions": "Definire il prossimo task concreto e collegarlo a un obiettivo.",
+        }
+        return fallbacks[section_key]
+
+    def _executive_role(self, user_message: str) -> str:
+        normalized = user_message.lower()
+        if any(term in normalized for term in ("contenuto", "contenuti", "post", "script", "tiktok", "instagram", "youtube", "newsletter", "piano editoriale")):
+            return "content_director"
+        if any(term in normalized for term in ("obiettivo", "obiettivi", "goal", "progresso", "priorità", "priorita")):
+            return "goal_advisor"
+        if any(term in normalized for term in ("business", "strategia", "strategy", "monetizzazione", "audience", "lead", "clienti")):
+            return "strategy_consultant"
+        return "executive_team"
+
+    def _executive_summary(self, user_message: str, direct_answer: str, role: str) -> str:
+        direct_answer = self._compact_mobile_line(direct_answer, max_chars=220)
+        if role == "content_director":
+            return f"Come Content Director: {direct_answer or 'la richiesta riguarda un output contenuto da rendere eseguibile.'}"
+        if role == "strategy_consultant":
+            return f"Come Strategy Consultant: {direct_answer or 'la richiesta va tradotta in priorita e decisioni operative.'}"
+        if role == "goal_advisor":
+            return f"Stato obiettivi: {direct_answer or 'la richiesta riguarda progresso, priorita e prossime azioni.'}"
+        return direct_answer or "Il team executive ha sintetizzato la richiesta in una risposta operativa."
+
+    def _executive_recommendations(self, user_message: str, role: str) -> list[str]:
+        if role == "content_director":
+            return [
+                "Trasforma l'idea in un framework pronto da eseguire: hook, struttura, CTA e canale.",
+                "Mantieni il contenuto centrato su finance, fiducia e conversione audience.",
+            ]
+        if role == "strategy_consultant":
+            return [
+                "Concentra risorse sul vincolo che sblocca piu crescita o monetizzazione.",
+                "Converti la raccomandazione in task misurabili entro questa settimana.",
+            ]
+        if role == "goal_advisor":
+            return [
+                "Prioritizza i task che supportano direttamente gli obiettivi attivi.",
+                "Aggiorna il progresso con una metrica semplice e verificabile.",
+            ]
+        if "?" in user_message:
+            return ["Usa la risposta per decidere il prossimo passo, non solo per accumulare informazioni."]
+        return ["Trasforma questa risposta in un task operativo con owner, priorita e obiettivo collegato."]
 
     def _render_section(
         self,
@@ -300,6 +412,9 @@ class ResponseFormatter:
 
     def _remove_raw_metadata(self, text: str) -> str:
         text = re.sub(r"\b(id|source_task_id|matched_keywords|score|created_at|updated_at|completed_at):\s*[^-]+", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\btarget=", "target: ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bprogress=", "progresso: ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\[([^\]]+)\]", r"(\1)", text)
         text = re.sub(r"\s+-\s+-\s+", " - ", text)
         return text.strip(" -")
 
@@ -323,6 +438,9 @@ class ResponseFormatter:
         text = re.sub(r"[*~>]+", "", text)
         text = re.sub(r"[•●◆◇▶▷]+", "-", text)
         text = re.sub(r"\[[a-z_]+\]", "", text)
+        text = re.sub(r"\[([^\]]+)\]", r"(\1)", text)
+        text = re.sub(r"\btarget=", "target: ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bprogress=", "progresso: ", text, flags=re.IGNORECASE)
         text = self._strip_raw_structure_tokens(text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"[ \t]{2,}", " ", text)
@@ -817,6 +935,7 @@ class ResponseFormatter:
             "lessons:",
             "tasks:",
             "agent instructions:",
+            "active strategic goals",
             "usa queste memorie",
             "non contraddire",
             "task:",
