@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Optional
 
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from app.memory import Memory
-from app.models import BrainState, LongTermMemory
+from app.models import BrainState, Goal, LongTermMemory
 
 
 BRAIN_MEMORY_TYPES = {
@@ -212,6 +213,7 @@ class BrainCore:
             self._section("Identita", grouped["identity"], fallback="Michele sta costruendo AI Brain come cervello persistente personale/business."),
             self._section("Business profile", grouped["business_profile"], fallback="Business centrato su finance, educazione finanziaria, investimenti e personal brand."),
             self._section("Obiettivi e priorita", grouped["goals"], fallback="Crescita del business, contenuti migliori, memoria decisionale e automazioni operative."),
+            self._goals_section(),
             self._section("Brand positioning", grouped["brand_positioning"], fallback="Personal brand finance pratico, autorevole, multi-platform e orientato alla conversione."),
             self._section("Preferenze", grouped["preferences"], fallback="Risposte in italiano, concrete, sintetiche, professionali e adatte a Telegram."),
             self._section("Content strategy", grouped["content_strategy"], fallback="Contenuti finance educativi, format social, funnel e conversione audience."),
@@ -221,6 +223,33 @@ class BrainCore:
             self._section("Agent instructions", grouped["agent_instructions"], fallback="Manager sintetizza, Finance Strategist cura strategia finance, Content produce output utilizzabili."),
         ]
         return "\n".join(sections).strip()
+
+    def _goals_section(self) -> str:
+        goals = (
+            self.db.query(Goal)
+            .filter(Goal.status == "active")
+            .order_by(
+                case(
+                    (Goal.priority == "critical", 0),
+                    (Goal.priority == "high", 1),
+                    (Goal.priority == "medium", 2),
+                    (Goal.priority == "low", 3),
+                    else_=4,
+                ),
+                Goal.updated_at.desc(),
+            )
+            .limit(8)
+            .all()
+        )
+        if not goals:
+            return "Active strategic goals: Nessun obiettivo attivo salvato."
+
+        parts = []
+        for goal in goals:
+            progress = f" progresso={goal.current_value}" if goal.current_value else ""
+            target = f" target={goal.target_value}" if goal.target_value else ""
+            parts.append(f"{goal.title} [{goal.category}/{goal.timeframe}/{goal.priority}]{target}{progress}")
+        return "Active strategic goals: " + " | ".join(parts)
 
     def _section(self, title: str, memories: list[LongTermMemory], fallback: str) -> str:
         if not memories:

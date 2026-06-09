@@ -69,6 +69,29 @@ class BrainState(Base):
     )
 
 
+class Goal(Base):
+    __tablename__ = "goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    category: Mapped[str] = mapped_column(String(64), default="business", nullable=False, index=True)
+    timeframe: Mapped[str] = mapped_column(String(32), default="quarterly", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, index=True)
+    priority: Mapped[str] = mapped_column(String(32), default="medium", nullable=False, index=True)
+    success_metric: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    target_value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    current_value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
 class EditorialPlan(Base):
     __tablename__ = "editorial_plans"
 

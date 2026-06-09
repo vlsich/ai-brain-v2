@@ -163,6 +163,10 @@ class ManagerAgent:
                             "fai una sola domanda di chiarimento. Usa solo memorie rilevanti; "
                             "se non sai qualcosa, dillo chiaramente. Mantieni focus sul business "
                             "finance, sul personal brand e sugli obiettivi di Michele quando pertinenti. "
+                            "Considera sempre gli obiettivi attivi presenti nel contesto prima di dare "
+                            "raccomandazioni. Quando proponi task o priorita, indica quale obiettivo "
+                            "supportano e privilegia cio che avvicina a finance personal brand, audience, "
+                            "content system e monetizzazione. "
                             f"{GLOBAL_AGENT_RULES}"
                             f"\n\n{memory_section}"
                         ),
@@ -197,8 +201,9 @@ class ManagerAgent:
                             "che serve, elimina ridondanza e genericita. Mantieni focus sul business "
                             "finance/personal brand di Michele quando pertinente. Quando il task ha "
                             "implicazioni operative, prioritizza le azioni, proponi task concreti, "
-                            "raccomandazioni e priorita settimanali. Rispetta sempre i vincoli espliciti "
-                            "del task corrente. "
+                            "raccomandazioni e priorita settimanali. Ogni task proposto deve dire quale "
+                            "obiettivo attivo supporta, quando il contesto lo permette. Rispetta sempre "
+                            "i vincoli espliciti del task corrente. "
                             f"{GLOBAL_AGENT_RULES}"
                             f"{memory_section}"
                         ),

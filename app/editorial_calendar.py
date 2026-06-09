@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.agents.content_planner import ContentPlannerAgent
 from app.brain_core import BrainCore
 from app.config import get_settings
+from app.goal_engine import GoalEngine
 from app.memory import Memory
 from app.models import ContentIdea, ContentTask, EditorialPlan
 
@@ -18,12 +19,15 @@ class EditorialCalendar:
         self.settings = get_settings()
         self.memory = Memory(db)
         self.brain_core = BrainCore(db)
+        self.goal_engine = GoalEngine(db)
         self.planner = ContentPlannerAgent(self.settings)
 
     def create_weekly_plan(self, prompt: str) -> dict[str, Any]:
         memories = self.memory.retrieve_relevant_memories(prompt, limit=6)
         memory_context = self.memory.build_context_from_memory(memories)
-        brain_context = self.brain_core.context_for_agents()
+        brain_context = "\n\n".join(
+            part for part in (self.brain_core.context_for_agents(), self.goal_engine.goal_context()) if part
+        )
         payload = self.planner.plan_week(prompt, brain_context=brain_context, memory_context=memory_context)
         saved = self.save_planner_payload(payload)
 

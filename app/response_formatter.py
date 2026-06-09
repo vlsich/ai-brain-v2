@@ -320,7 +320,7 @@ class ResponseFormatter:
         text = re.sub(r"`([^`]+)`", r"\1", text)
         text = re.sub(r"#{1,6}\s*", "", text)
         text = text.replace("---", "\n")
-        text = re.sub(r"[*_~>]+", "", text)
+        text = re.sub(r"[*~>]+", "", text)
         text = re.sub(r"[•●◆◇▶▷]+", "-", text)
         text = re.sub(r"\[[a-z_]+\]", "", text)
         text = self._strip_raw_structure_tokens(text)

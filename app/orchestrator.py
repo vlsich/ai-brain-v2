@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import json
+import re
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from app.brain_core import BrainCore
 from app.config import get_settings
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
+from app.goal_engine import GoalEngine
 from app.memory import Memory
 from app.task_engine import TaskEngine
 
@@ -39,6 +41,8 @@ class Orchestrator:
         self.editorial_calendar = EditorialCalendar(db)
         self.task_engine = TaskEngine(db)
         self.decision_journal = DecisionJournal(db)
+        self.goal_engine = GoalEngine(db)
+        self.goal_engine.ensure_default_goals()
         self.daily_review_agent = DailyReviewAgent(self.settings)
         self.weekly_review_agent = WeeklyReviewAgent(self.settings)
 
@@ -59,7 +63,9 @@ class Orchestrator:
 
         try:
             retrieved_memories = self.memory.retrieve_relevant_memories(prompt, limit=7)
-            brain_context = self.brain_core.context_for_agents()
+            brain_context = "\n\n".join(
+                part for part in (self.brain_core.context_for_agents(), self.goal_engine.goal_context()) if part
+            )
             memory_context = self._build_agent_context(brain_context, retrieved_memories)
             productivity_result = self._handle_productivity_command(prompt, brain_context, memory_context)
             if productivity_result:
@@ -241,6 +247,10 @@ class Orchestrator:
     ) -> dict[str, str] | None:
         normalized = prompt.lower().strip()
 
+        goal_result = self._handle_goal_command(prompt, normalized)
+        if goal_result:
+            return goal_result
+
         if self._is_complete_task_command(normalized):
             completed = self.task_engine.complete_task_from_text(prompt)
             if not completed:
@@ -276,7 +286,7 @@ class Orchestrator:
 
         if self._is_daily_review_command(normalized):
             self.task_engine.ensure_foundation_tasks(brain_context, memory_context)
-            tasks = self.task_engine.list_today_tasks(limit=8)
+            tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_today_tasks(limit=8))
             decisions = self.decision_journal.latest_decisions(limit=5)
             payload = self.daily_review_agent.run(
                 tasks=tasks,
@@ -291,7 +301,7 @@ class Orchestrator:
             }
 
         if self._is_weekly_review_command(normalized):
-            pending_tasks = self.task_engine.list_pending_tasks(limit=20)
+            pending_tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_pending_tasks(limit=20))
             completed_tasks = self.task_engine.list_completed_tasks(days=7, limit=20)
             decisions = self.decision_journal.latest_decisions(limit=10)
             payload = self.weekly_review_agent.run(
@@ -309,34 +319,96 @@ class Orchestrator:
 
         if self._is_priorities_command(normalized):
             self.task_engine.ensure_foundation_tasks(brain_context, memory_context)
-            tasks = self.task_engine.list_high_priority_tasks(limit=8)
+            tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_high_priority_tasks(limit=8))
             if not tasks:
-                tasks = self.task_engine.list_pending_tasks(limit=8)
+                tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_pending_tasks(limit=8))
             return {
                 "agent_name": "task_engine",
                 "final_answer": (
                     "Priorita operative:\n"
-                    f"{self.task_engine.format_tasks(tasks, 'Nessuna priorita pendente salvata.')}\n\n"
-                    "Raccomandazione: scegli il task con impatto piu diretto su audience, contenuti finance o monetizzazione."
+                    f"{self._format_goal_aligned_tasks(tasks, 'Nessuna priorita pendente salvata.')}\n\n"
+                    "Raccomandazione: scegli il task piu allineato agli obiettivi attivi di audience, contenuti finance o monetizzazione."
                 ),
             }
 
         if self._is_today_tasks_command(normalized):
             self.task_engine.ensure_foundation_tasks(brain_context, memory_context)
-            tasks = self.task_engine.list_today_tasks(limit=8)
+            tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_today_tasks(limit=8))
             return {
                 "agent_name": "task_engine",
                 "final_answer": (
                     "Task consigliati per oggi:\n"
-                    f"{self.task_engine.format_tasks(tasks, 'Nessun task pendente salvato per oggi.')}\n\n"
+                    f"{self._format_goal_aligned_tasks(tasks, 'Nessun task pendente salvato per oggi.')}\n\n"
                     "Prossimo passo: chiudi il primo task prima di aprire nuove idee."
                 ),
             }
 
         return None
 
+    def _handle_goal_command(self, prompt: str, normalized: str) -> dict[str, str] | None:
+        if self._is_list_goals_command(normalized):
+            goals = self.goal_engine.list_active_goals(limit=10)
+            return {
+                "agent_name": "goal_engine",
+                "final_answer": "Obiettivi attivi:\n" + self.goal_engine.format_goals(goals),
+            }
+
+        if self._is_create_goal_command(normalized):
+            goal = self.goal_engine.create_goal(**self.goal_engine.parse_goal_from_text(prompt))
+            self.brain_core.update_state_summary()
+            return {
+                "agent_name": "goal_engine",
+                "final_answer": (
+                    "Obiettivo creato:\n"
+                    f"{goal.id}. {goal.title}\n"
+                    f"Categoria: {goal.category}\n"
+                    f"Timeframe: {goal.timeframe}\n"
+                    f"Metrica: {goal.success_metric}"
+                ),
+            }
+
+        if self._is_update_goal_progress_command(normalized):
+            goal_id = self._extract_first_number(normalized)
+            progress = self._extract_progress_value(prompt)
+            if not goal_id or not progress:
+                return {
+                    "agent_name": "goal_engine",
+                    "final_answer": "Mi serve ID obiettivo e progresso. Esempio: aggiorna progresso obiettivo 2 a 40%.",
+                }
+            goal = self.goal_engine.update_goal_progress(goal_id, progress)
+            if goal is None:
+                return {"agent_name": "goal_engine", "final_answer": "Non trovo questo obiettivo."}
+            self.brain_core.update_state_summary()
+            return {
+                "agent_name": "goal_engine",
+                "final_answer": f"Progresso aggiornato:\n{goal.id}. {goal.title}\nProgresso: {goal.current_value}",
+            }
+
+        if self._is_goal_supported_tasks_command(normalized):
+            tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_pending_tasks(limit=20))
+            return {
+                "agent_name": "goal_engine",
+                "final_answer": "Task collegati agli obiettivi:\n" + self._format_goal_aligned_tasks(tasks, "Nessun task collegato agli obiettivi."),
+            }
+
+        if self._is_weekly_goal_priorities_command(normalized):
+            self.task_engine.ensure_foundation_tasks(self.goal_engine.goal_context(), "")
+            tasks = self.goal_engine.prioritize_tasks_by_goals(self.task_engine.list_pending_tasks(limit=12))[:6]
+            goals = self.goal_engine.list_active_goals(limit=5)
+            return {
+                "agent_name": "goal_engine",
+                "final_answer": (
+                    "Priorita della settimana in base agli obiettivi:\n"
+                    f"{self._format_goal_aligned_tasks(tasks, 'Nessun task disponibile.')}\n\n"
+                    "Obiettivi guida:\n"
+                    f"{self.goal_engine.format_goals(goals)}"
+                ),
+            }
+
+        return None
+
     def _format_daily_review(self, review_id: int, payload: dict[str, str], tasks: list) -> str:
-        task_lines = self.task_engine.format_tasks(tasks[:5], "Nessun task operativo disponibile.")
+        task_lines = self._format_goal_aligned_tasks(tasks[:5], "Nessun task operativo disponibile.")
         return (
             f"Briefing giornaliero #{review_id}\n\n"
             f"Vittorie:\n{payload.get('wins', '')}\n\n"
@@ -355,6 +427,32 @@ class Orchestrator:
             f"Allineamento:\n{payload.get('alignment', '')}\n\n"
             f"Raccomandazione:\n{payload.get('recommendations', '')}"
         )
+
+    def _format_goal_aligned_tasks(self, tasks: list, empty_message: str) -> str:
+        if not tasks:
+            return empty_message
+        lines = []
+        for task in tasks:
+            due = task.due_date.strftime("%d/%m") if task.due_date else "senza scadenza"
+            goal = task.related_goal or self._best_goal_title_for_task(task) or "obiettivo da collegare"
+            lines.append(f"{task.id}. {task.title} [{task.priority}] - {task.estimated_minutes} min - {due} | goal: {goal}")
+        return "\n".join(lines)
+
+    def _best_goal_title_for_task(self, task) -> str | None:
+        goal = self.goal_engine.best_goal_for_text(
+            f"{task.title} {task.description} {task.category} {task.related_topic or ''}"
+        )
+        return goal.title if goal else None
+
+    def _extract_first_number(self, text: str) -> int | None:
+        match = re.search(r"\d+", text)
+        return int(match.group(0)) if match else None
+
+    def _extract_progress_value(self, text: str) -> str | None:
+        match = re.search(r"obiettivo\s+\d+\s+(?:a|al|=)\s*(.+)$", text, flags=re.IGNORECASE)
+        if not match:
+            match = re.search(r"(?:progresso|progress)\s+\d+\s+(?:a|al|=)\s*(.+)$", text, flags=re.IGNORECASE)
+        return match.group(1).strip() if match else None
 
     def _is_today_tasks_command(self, normalized: str) -> bool:
         patterns = (
@@ -387,6 +485,31 @@ class Orchestrator:
 
     def _is_weekly_review_command(self, normalized: str) -> bool:
         patterns = ("review settimanale", "weekly review", "riepilogo settimanale")
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_list_goals_command(self, normalized: str) -> bool:
+        patterns = ("quali sono i miei obiettivi", "mostrami gli obiettivi", "obiettivi attivi", "lista obiettivi")
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_create_goal_command(self, normalized: str) -> bool:
+        patterns = ("crea un obiettivo", "crea obiettivo", "nuovo obiettivo")
+        return any(normalized.startswith(pattern) for pattern in patterns)
+
+    def _is_update_goal_progress_command(self, normalized: str) -> bool:
+        patterns = ("aggiorna progresso obiettivo", "aggiorna obiettivo", "progresso obiettivo")
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_goal_supported_tasks_command(self, normalized: str) -> bool:
+        patterns = ("quali task supportano i miei obiettivi", "task supportano i miei obiettivi", "task collegati agli obiettivi")
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_weekly_goal_priorities_command(self, normalized: str) -> bool:
+        patterns = (
+            "dammi le priorità della settimana in base agli obiettivi",
+            "dammi le priorita della settimana in base agli obiettivi",
+            "priorità della settimana in base agli obiettivi",
+            "priorita della settimana in base agli obiettivi",
+        )
         return any(pattern in normalized for pattern in patterns)
 
     def _serialize_retrieved_memories(self, memories: list[dict[str, Any]]) -> list[dict[str, Any]]:

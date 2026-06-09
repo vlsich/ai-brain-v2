@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.database import SessionLocal, get_db, init_db
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
+from app.goal_engine import GoalEngine
 from app.memory import Memory
 from app.models import DailyReview, WeeklyReview
 from app.orchestrator import Orchestrator
@@ -220,11 +221,56 @@ class WeeklyReviewResponse(BaseModel):
     related_topic: Optional[str] = None
 
 
+class GoalCreate(BaseModel):
+    title: str = Field(..., min_length=3)
+    description: str = ""
+    category: str = "business"
+    timeframe: str = "quarterly"
+    status: str = "active"
+    priority: str = "medium"
+    success_metric: str = ""
+    target_value: Optional[str] = None
+    current_value: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class GoalUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    timeframe: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    success_metric: Optional[str] = None
+    target_value: Optional[str] = None
+    current_value: Optional[str] = None
+    related_topic: Optional[str] = None
+
+
+class GoalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str
+    category: str
+    timeframe: str
+    status: str
+    priority: str
+    success_metric: str
+    target_value: Optional[str] = None
+    current_value: Optional[str] = None
+    related_topic: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
     db = SessionLocal()
     try:
+        GoalEngine(db).ensure_default_goals()
         Memory(db).ensure_core_memories()
         BrainCore(db).seed()
     finally:
@@ -355,7 +401,13 @@ def list_editorial_tasks(
 
 @app.post("/productivity/tasks", response_model=ProductivityTaskResponse)
 def create_productivity_task(payload: ProductivityTaskCreate, db: Session = Depends(get_db)):
-    return TaskEngine(db).create_task(**payload.model_dump())
+    data = payload.model_dump()
+    if not data.get("related_goal"):
+        goal = GoalEngine(db).best_goal_for_text(f"{data.get('title', '')} {data.get('description', '')} {data.get('category', '')}")
+        if goal:
+            data["related_goal"] = goal.title
+            data["related_topic"] = data.get("related_topic") or goal.related_topic
+    return TaskEngine(db).create_task(**data)
 
 
 @app.patch("/productivity/tasks/{task_id}", response_model=ProductivityTaskResponse)
@@ -386,7 +438,13 @@ def list_high_priority_productivity_tasks(limit: int = 10, db: Session = Depends
 
 @app.post("/decisions", response_model=DecisionResponse)
 def create_decision(payload: DecisionCreate, db: Session = Depends(get_db)):
-    return DecisionJournal(db).save_decision(**payload.model_dump())
+    data = payload.model_dump()
+    if not data.get("related_goal"):
+        goal = GoalEngine(db).best_goal_for_text(f"{data.get('title', '')} {data.get('decision', '')} {data.get('reasoning', '')}")
+        if goal:
+            data["related_goal"] = goal.title
+            data["related_topic"] = data.get("related_topic") or goal.related_topic
+    return DecisionJournal(db).save_decision(**data)
 
 
 @app.get("/decisions", response_model=list[DecisionResponse])
@@ -402,3 +460,33 @@ def list_daily_reviews(limit: int = 10, db: Session = Depends(get_db)):
 @app.get("/reviews/weekly", response_model=list[WeeklyReviewResponse])
 def list_weekly_reviews(limit: int = 10, db: Session = Depends(get_db)):
     return db.query(WeeklyReview).order_by(WeeklyReview.created_at.desc()).limit(limit).all()
+
+
+@app.post("/goals", response_model=GoalResponse)
+def create_goal(payload: GoalCreate, db: Session = Depends(get_db)):
+    goal = GoalEngine(db).create_goal(**payload.model_dump())
+    BrainCore(db).update_state_summary()
+    return goal
+
+
+@app.get("/goals", response_model=list[GoalResponse])
+def list_goals(
+    status: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    return GoalEngine(db).list_goals(status=status, limit=limit)
+
+
+@app.patch("/goals/{goal_id}", response_model=GoalResponse)
+def update_goal(goal_id: int, payload: GoalUpdate, db: Session = Depends(get_db)):
+    goal = GoalEngine(db).update_goal(goal_id, **payload.model_dump(exclude_unset=True))
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    BrainCore(db).update_state_summary()
+    return goal
+
+
+@app.get("/goals/active", response_model=list[GoalResponse])
+def list_active_goals(limit: int = 20, db: Session = Depends(get_db)):
+    return GoalEngine(db).list_active_goals(limit=limit)

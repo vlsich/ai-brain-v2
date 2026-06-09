@@ -52,7 +52,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "- Cosa dovrei fare oggi?\n"
             "- Review settimanale\n"
             "- Salva questa decisione: focus su TikTok per 30 giorni\n"
-            "- Segna task completato 3"
+            "- Segna task completato 3\n"
+            "- Quali sono i miei obiettivi?\n"
+            "- Aggiorna progresso obiettivo 2 a 35%"
         ),
     )
 

@@ -172,6 +172,72 @@ Esempi di messaggi:
 - `Mostrami le priorita`
 - `Salva questa decisione: focus su TikTok per 30 giorni`
 - `Segna task completato 3`
+- `Quali sono i miei obiettivi?`
+- `Crea un obiettivo aumentare fiducia audience finance`
+- `Aggiorna progresso obiettivo 2 a 35%`
+- `Quali task supportano i miei obiettivi?`
+- `Dammi le priorita della settimana in base agli obiettivi`
+
+## Goal Management
+
+AI Brain gestisce obiettivi strategici e li collega a task, decisioni, review e piani contenuto. Gli obiettivi attivi vengono inclusi nel `Brain State Summary`, nel contesto degli agenti e nelle priorita operative.
+
+Categorie supportate:
+
+- `business`
+- `personal_brand`
+- `content`
+- `finance`
+- `audience`
+- `monetization`
+- `operations`
+
+Timeframe supportati:
+
+- `yearly`
+- `quarterly`
+- `monthly`
+- `weekly`
+
+Se non esistono obiettivi, AI Brain inizializza obiettivi base:
+
+- Grow Michele's finance personal brand
+- Build consistent multi-platform content system
+- Improve audience trust and authority
+- Convert audience into leads/customers
+- Build AI Brain as business operating system
+
+Creare un obiettivo:
+
+```bash
+curl -X POST http://127.0.0.1:8000/goals \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title":"Aumentare lead qualificati dalla newsletter finance",
+    "description":"Usare contenuti educativi e CTA per trasformare audience in lead.",
+    "category":"monetization",
+    "timeframe":"monthly",
+    "priority":"high",
+    "success_metric":"Lead qualificati generati",
+    "target_value":"100 lead",
+    "related_topic":"newsletter finance"
+  }'
+```
+
+Leggere obiettivi:
+
+```bash
+curl http://127.0.0.1:8000/goals
+curl http://127.0.0.1:8000/goals/active
+```
+
+Aggiornare progresso:
+
+```bash
+curl -X PATCH http://127.0.0.1:8000/goals/1 \
+  -H "Content-Type: application/json" \
+  -d '{"current_value":"35 lead"}'
+```
 
 ## Proactive Productivity Layer
 
@@ -191,6 +257,8 @@ Ogni task, decisione e review salva metadati relazionali per il futuro Knowledge
 - `related_topic`
 
 Il layer usa `Brain State Summary` e memory retrieval, con focus su finanza, investing, content creation, personal brand growth, audience building e monetizzazione.
+
+Quando crei task o decisioni senza `related_goal`, AI Brain prova a collegarli automaticamente all'obiettivo attivo piu coerente.
 
 Creare un task:
 
@@ -299,6 +367,7 @@ Tabelle principali:
 - `tasks`: task ricevuti e risposta finale.
 - `agent_results`: output prodotti dai singoli agenti.
 - `long_term_memory`: memoria strutturata persistente.
+- `goals`: obiettivi strategici e metriche di progresso.
 - `editorial_plans`: contenuti pianificati.
 - `content_ideas`: idee contenuto salvate.
 - `content_tasks`: task operativi per produzione e crescita.
