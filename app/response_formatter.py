@@ -38,6 +38,18 @@ SECTION_TITLES = {
 }
 
 
+ROLE_BY_INTENT = {
+    "simple_question": "Conversational Advisor",
+    "advice": "Executive Advisor",
+    "strategy": "Strategy Consultant",
+    "content_creation": "Content Director",
+    "planning": "Operations Manager",
+    "business_analysis": "Strategy Consultant",
+    "task_management": "Operations Manager",
+    "goal_review": "CEO Agent",
+}
+
+
 EXECUTIVE_SECTION_TITLES = {
     "executive_summary": "Executive Summary",
     "analysis": "Analysis",
@@ -62,11 +74,12 @@ class ResponseFormatter:
         points = self._coerce_points(tasks)
         if not points:
             points = ["Nessun task operativo disponibile."]
-        return self._render_executive_response(
-            summary="La lista task e stata consolidata in priorita operative.",
-            analysis=points,
-            recommendations=["Dai precedenza ai task piu vicini a obiettivi, monetizzazione e crescita audience."],
-            next_actions=points[:3],
+        return self._render_natural_response(
+            intro="Partirei da questi task, in ordine operativo.",
+            sections=[
+                ("Task", points, "numbered"),
+                ("Nota operativa", ["Dai precedenza ai task piu vicini a obiettivi, monetizzazione e crescita audience."], "bullets"),
+            ],
             markdown=markdown,
         )
 
@@ -85,21 +98,25 @@ class ResponseFormatter:
         analysis_points.extend([f"Blocco: {point}" for point in self._coerce_points(blockers, limit=3)])
         analysis_points.extend(self._coerce_points(analysis, limit=3))
         priority_points = self._coerce_points(priorities, limit=5)
-        return self._render_executive_response(
-            summary="Il briefing evidenzia cosa sta avanzando, cosa blocca il lavoro e quali priorita meritano attenzione oggi.",
-            analysis=analysis_points or priority_points,
-            recommendations=self._coerce_points(recommendations, limit=4) or ["Proteggi il focus sui task che avvicinano obiettivi business e personal brand."],
-            next_actions=self._coerce_points(next_steps, limit=4) or priority_points[:3],
+        return self._render_natural_response(
+            intro="Briefing pronto: oggi conta proteggere focus, avanzamento e decisioni utili.",
+            sections=[
+                ("Priorità", priority_points or self._coerce_points(next_steps, limit=4), "numbered"),
+                ("Lettura", analysis_points or ["Nessun blocco critico emerso dai dati disponibili."], "bullets"),
+                ("Prossime mosse", self._coerce_points(recommendations, limit=4) or ["Proteggi il focus sui task che avvicinano obiettivi business e personal brand."], "bullets"),
+            ],
             markdown=markdown,
         )
 
     def format_review(self, review: Any, markdown: bool = True) -> str:
         payload = review if isinstance(review, dict) else {}
-        return self._render_executive_response(
-            summary="La review sintetizza progressi, decisioni e allineamento rispetto agli obiettivi.",
-            analysis=self._coerce_points(payload.get("progress") or payload.get("alignment") or review, limit=5),
-            recommendations=self._coerce_points(payload.get("recommendations"), limit=4) or ["Riduci dispersione e concentra la prossima settimana su un risultato misurabile."],
-            next_actions=["Scegli la priorita principale della prossima settimana.", "Trasformala in 3 task eseguibili.", "Collega ogni task a un obiettivo attivo."],
+        return self._render_natural_response(
+            intro="La review va letta come controllo di direzione: cosa e avanzato, cosa pesa e cosa va scelto dopo.",
+            sections=[
+                ("Lettura", self._coerce_points(payload.get("progress") or payload.get("alignment") or review, limit=5), "bullets"),
+                ("Decisioni consigliate", self._coerce_points(payload.get("recommendations"), limit=4) or ["Riduci dispersione e concentra la prossima settimana su un risultato misurabile."], "bullets"),
+                ("Prossime azioni", ["Scegli la priorita principale della prossima settimana.", "Trasformala in 3 task eseguibili.", "Collega ogni task a un obiettivo attivo."], "numbered"),
+            ],
             markdown=markdown,
         )
 
@@ -111,11 +128,13 @@ class ResponseFormatter:
             payload.get("reasoning"),
             payload.get("expected_outcome"),
         ]
-        return self._render_executive_response(
-            summary="La decisione e stata trasformata in un punto operativo da monitorare.",
-            analysis=self._coerce_points(analysis, limit=5),
-            recommendations=self._coerce_points(payload.get("recommendations"), limit=4) or ["Mantieni la decisione collegata a un obiettivo e verifica se produce il risultato atteso."],
-            next_actions=["Definisci il primo task collegato alla decisione.", "Rivedi la decisione quando cambiano dati, priorita o risultati."],
+        return self._render_natural_response(
+            intro="Ho trasformato la decisione in un punto operativo da monitorare.",
+            sections=[
+                ("Lettura", self._coerce_points(analysis, limit=5), "bullets"),
+                ("Consiglio", self._coerce_points(payload.get("recommendations"), limit=4) or ["Mantieni la decisione collegata a un obiettivo e verifica se produce il risultato atteso."], "bullets"),
+                ("Prossime azioni", ["Definisci il primo task collegato alla decisione.", "Rivedi la decisione quando cambiano dati, priorita o risultati."], "numbered"),
+            ],
             markdown=markdown,
         )
 
@@ -127,43 +146,49 @@ class ResponseFormatter:
         analysis_items.extend(self._coerce_points(payload.get("plans"))[:4])
         analysis_items.extend(self._coerce_points(payload.get("ideas"))[:5])
         task_items = self._coerce_points(payload.get("tasks"))[:6]
-        return self._render_executive_response(
-            summary="Il piano contenuti e stato convertito in un framework operativo da Content Director.",
-            analysis=analysis_items or self._coerce_points(plan, limit=5),
-            recommendations=["Pubblica prima il contenuto con hook piu chiaro e CTA piu vicina alla monetizzazione.", "Mantieni focus su finance, fiducia e conversione audience."],
-            next_actions=task_items[:4] or ["Scegli un contenuto e chiedimi di trasformarlo in script pronto da registrare."],
+        ready_content = analysis_items or self._coerce_points(plan, limit=5)
+        return self._render_natural_response(
+            intro="Ecco un piano contenuti pronto da eseguire.",
+            sections=[
+                ("Contenuti", ready_content, "numbered"),
+                ("Regia editoriale", self._content_framework_points(ready_content), "bullets"),
+                ("Prossime azioni", task_items[:4] or ["Scegli un contenuto e trasformalo in script pronto da registrare."], "checklist"),
+            ],
             markdown=markdown,
         )
 
     def format_recommendations(self, recommendations: Any, markdown: bool = True) -> str:
         points = self._coerce_points(recommendations)
-        return self._render_executive_response(
-            summary="Le raccomandazioni sono state sintetizzate in decisioni operative.",
-            analysis=points,
-            recommendations=points,
-            next_actions=points[:3],
+        return self._render_natural_response(
+            intro="Sintetizzo le raccomandazioni in mosse operative.",
+            sections=[
+                ("Cosa fare", points, "bullets"),
+                ("Primi passi", points[:3], "numbered"),
+            ],
             markdown=markdown,
         )
 
     def _format(self, user_message: str, raw_reply: str, max_chars: int | None, markdown: bool) -> str:
+        intent = self._detect_intent(user_message)
         parsed = self._extract_structured(raw_reply)
-        if parsed is not None:
+        raw_starts_structured = raw_reply.strip().startswith(("{", "[", "```"))
+        if parsed is not None and not (intent == "decision_support" and not raw_starts_structured):
             formatted = self._format_structured(user_message, parsed, markdown)
             if formatted:
                 return self._truncate(formatted, max_chars, markdown=markdown)
 
         cleaned = self._clean_text(raw_reply)
         if not cleaned:
-            formatted = self._render_executive_response(
-                summary="Non ci sono abbastanza informazioni per una risposta affidabile.",
-                analysis=["Il contesto disponibile non basta per distinguere obiettivo, vincoli e prossima azione."],
-                recommendations=["Chiedere un solo dato mancante prima di procedere."],
-                next_actions=["Dimmi l'obiettivo principale o il risultato che vuoi ottenere."],
+            formatted = self._render_natural_response(
+                intro="Mi manca un dato essenziale per rispondere bene.",
+                sections=[
+                    ("Domanda", ["Qual e il risultato concreto che vuoi ottenere?"], "bullets"),
+                ],
                 markdown=markdown,
             )
             return self._truncate(formatted, max_chars, markdown=markdown)
 
-        role = self._executive_role(user_message)
+        role = ROLE_BY_INTENT[intent]
 
         direct_answer = self._first_useful_sentences(cleaned, max_sentences=2)
         if (
@@ -176,6 +201,10 @@ class ResponseFormatter:
         blocker_points = self._extract_label_points(cleaned, labels=("blocchi", "blockers"), limit=3)
         priority_points = self._extract_label_points(cleaned, labels=("priorita", "priorità", "priorities", "task"), limit=4)
         analysis_points = self._extract_key_points(cleaned, limit=3, exclude_text=direct_answer)
+        numbered_points = self._extract_inline_numbered_points(cleaned, limit=6)
+        if intent in {"task_management", "goal_review"} and numbered_points:
+            priority_points = numbered_points[:4]
+            analysis_points = numbered_points[:4]
         plan_points = self._extract_plan_points(cleaned, limit=4, exclude_text=" ".join([direct_answer, " ".join(analysis_points)]))
         next_step = self._next_step(user_message, cleaned)
 
@@ -189,10 +218,13 @@ class ResponseFormatter:
             combined_analysis.extend([f"Blocco: {point}" for point in blocker_points])
         recommendations = self._extract_label_points(cleaned, labels=("raccomandazioni", "raccomandazione", "recommendations"), limit=4)
 
-        formatted = self._render_executive_response(
-            summary=self._executive_summary(user_message, direct_answer, role),
+        formatted = self._render_by_intent(
+            intent=intent,
+            role=role,
+            user_message=user_message,
+            summary=self._role_summary(user_message, direct_answer, intent, role),
             analysis=combined_analysis or [direct_answer],
-            recommendations=recommendations or self._executive_recommendations(user_message, role),
+            recommendations=recommendations or self._role_recommendations(user_message, intent),
             next_actions=(priority_points or plan_points or [next_step])[:4],
             markdown=markdown,
         )
@@ -251,6 +283,430 @@ class ResponseFormatter:
             return self.format_recommendations(payload.get("recommendations") or payload.get("raccomandazioni"), markdown=markdown)
 
         return ""
+
+    def _detect_intent(self, user_message: str) -> str:
+        normalized = user_message.lower()
+        if any(term in normalized for term in ("obiettivo", "obiettivi", "goal", "progresso obiettivo", "kpi", "metriche obiettivo")):
+            return "goal_review"
+        if any(term in normalized for term in ("task", "cosa devo fare", "cosa dovrei fare", "priorità", "priorita", "briefing", "operativo", "completato", "segna task")):
+            return "task_management"
+        if any(term in normalized for term in ("piano", "roadmap", "checklist", "calendario", "settimana", "pianifica", "organizza", "priorità della settimana", "priorita della settimana")):
+            return "planning"
+        if any(term in normalized for term in ("strategia", "strategy", "business", "monetizzazione", "lead", "clienti", "offerta", "posizionamento", "funnel", "crescita", "growth", "audience", "conversione", "profilo linkedin", "personal brand")):
+            return "strategy"
+        content_action = any(term in normalized for term in ("scrivi", "crea", "prepara", "fammi", "genera", "dammi"))
+        content_target = any(term in normalized for term in ("contenuto", "contenuti", "post", "script", "caption", "reel", "short", "tiktok", "instagram", "youtube", "newsletter", "hook", "idee contenuto", "idee contenuti"))
+        if content_action and content_target:
+            return "content_creation"
+        if any(term in normalized for term in ("analizza", "analisi", "benchmark", "mercato", "competitor", "dati", "diagnosi", "valuta")):
+            return "business_analysis"
+        if any(term in normalized for term in ("decisione", "decisioni", "decidere", "scelta", "scegliere", "conviene", "consigli", "consiglio", "secondo te", "cosa faresti", "aiutami a decidere")):
+            return "advice"
+        if self._is_simple_request(user_message) or normalized.endswith("?"):
+            return "simple_question"
+        return "advice"
+
+    def _render_by_intent(
+        self,
+        intent: str,
+        role: str,
+        user_message: str,
+        summary: str,
+        analysis: Any,
+        recommendations: Any,
+        next_actions: Any,
+        markdown: bool,
+    ) -> str:
+        if self._needs_formal_report(user_message):
+            return self._render_role_response(
+                role=role,
+                sections=[
+                    ("Executive Summary", summary),
+                    ("Analysis", analysis),
+                    ("Recommendations", recommendations),
+                    ("Next Actions", next_actions),
+                ],
+                markdown=markdown,
+                numbered_titles={"Next Actions"},
+                show_role=False,
+            )
+
+        if intent != "content_creation":
+            analysis = self._without_intro_points(analysis, summary)
+            recommendations = self._without_intro_points(recommendations, summary)
+            next_actions = self._without_intro_points(next_actions, summary)
+
+        if intent == "simple_question":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[],
+                markdown=markdown,
+            )
+        if intent == "advice":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[
+                    ("Come la vedo", self._decision_tradeoffs(user_message, analysis), "bullets"),
+                    ("Mossa pratica", self._default_next_actions(intent, user_message, next_actions)[:2], "numbered"),
+                ],
+                markdown=markdown,
+            )
+        if intent == "strategy":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[
+                    ("Direzione", analysis, "bullets"),
+                    ("Cosa farei", recommendations, "bullets"),
+                    ("Primo passo", self._default_next_actions(intent, user_message, next_actions)[:3], "numbered"),
+                ],
+                markdown=markdown,
+            )
+        if intent == "content_creation":
+            ready_content = self._ensure_ready_content(user_message, analysis)
+            return self._render_natural_response(
+                intro="Ecco una versione pronta da usare.",
+                sections=[
+                    ("Contenuto", ready_content, "plain"),
+                    ("Note di pubblicazione", recommendations[:2] if isinstance(recommendations, list) else recommendations, "bullets"),
+                ],
+                markdown=markdown,
+            )
+        if intent == "planning":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[
+                    ("Piano", next_actions or analysis, "checklist"),
+                    ("Priorità", recommendations, "bullets"),
+                ],
+                markdown=markdown,
+            )
+        if intent == "business_analysis":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[
+                    ("Lettura", analysis, "bullets"),
+                    ("Implicazioni", recommendations, "bullets"),
+                    ("Prossima mossa", self._default_next_actions(intent, user_message, next_actions)[:3], "numbered"),
+                ],
+                markdown=markdown,
+            )
+        if intent == "task_management":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[
+                    ("Task", next_actions or analysis, "numbered"),
+                    ("Nota operativa", recommendations[:2] if isinstance(recommendations, list) else recommendations, "bullets"),
+                ],
+                markdown=markdown,
+            )
+        if intent == "goal_review":
+            return self._render_natural_response(
+                intro=summary,
+                sections=[
+                    ("Dashboard obiettivi", analysis, "numbered"),
+                    ("Priorità CEO", recommendations, "bullets"),
+                    ("Prossime azioni", self._default_next_actions(intent, user_message, []), "numbered"),
+                ],
+                markdown=markdown,
+            )
+        return self._render_natural_response(
+            intro=summary,
+            sections=[
+                ("Punti chiave", analysis, "bullets"),
+                ("Prossimo passo", next_actions, "numbered"),
+            ],
+            markdown=markdown,
+        )
+
+    def _render_role_response(
+        self,
+        role: str,
+        sections: list[tuple[str, Any]],
+        markdown: bool,
+        numbered_titles: set[str] | None = None,
+        show_role: bool = True,
+    ) -> str:
+        numbered_titles = numbered_titles or set()
+        rendered = [self._render_role_header(role, markdown)] if show_role else []
+        for title, content in sections:
+            points = self._coerce_points(content, limit=8)
+            if not points:
+                points = [self._fallback_role_point(title)]
+            rendered.append(
+                self._render_named_section(
+                    title=title,
+                    points=points,
+                    markdown=markdown,
+                    numbered=title in numbered_titles,
+                    paragraph=title in {"Situation", "Strategic Readout", "Executive Dashboard", "Operations Dashboard", "Growth Diagnosis", "Decision Context", "Daily Operating Brief"},
+                )
+            )
+        return self._join_sections(rendered)
+
+    def _render_natural_response(
+        self,
+        intro: str,
+        sections: list[tuple[str, Any, str]],
+        markdown: bool,
+    ) -> str:
+        rendered: list[str] = []
+        intro_points = self._coerce_points(intro, limit=2)
+        if intro_points:
+            rendered.append(self._render_paragraph(" ".join(intro_points[:2]), markdown))
+
+        for title, content, style in sections:
+            points = self._coerce_points(content, limit=6)
+            if not points:
+                continue
+            rendered.append(self._render_natural_section(title, points, style, markdown))
+
+        return self._join_sections(rendered)
+
+    def _render_paragraph(self, text: str, markdown: bool) -> str:
+        text = self._compact_mobile_line(text, max_chars=360)
+        return self._escape_html(text) if markdown else text
+
+    def _render_natural_section(self, title: str, points: list[str], style: str, markdown: bool) -> str:
+        clean_points = self._dedupe_points([self._compact_mobile_line(point, max_chars=210) for point in points if point])[:6]
+        if style == "numbered":
+            body = "\n".join(
+                f"{index}. {self._escape_html(point) if markdown else point}"
+                for index, point in enumerate(clean_points, start=1)
+            )
+        elif style == "checklist":
+            body = "\n".join(f"□ {self._escape_html(point) if markdown else point}" for point in clean_points)
+        elif style == "plain":
+            body = "\n\n".join(self._escape_html(point) if markdown else point for point in clean_points)
+        else:
+            body = "\n".join(f"• {self._escape_html(point) if markdown else point}" for point in clean_points)
+
+        if markdown:
+            return f"<b>{self._escape_html(title)}</b>\n{body}"
+        return f"{title}\n{body}"
+
+    def _without_intro_points(self, value: Any, intro: str) -> list[str]:
+        points = self._coerce_points(value, limit=8)
+        intro_norm = self._normalize_for_compare(intro)
+        filtered = []
+        for point in points:
+            point_norm = self._normalize_for_compare(point)
+            if not point_norm:
+                continue
+            if point_norm in intro_norm or intro_norm in point_norm:
+                continue
+            filtered.append(point)
+        return self._dedupe_points(filtered)
+
+    def _normalize_for_compare(self, text: str) -> str:
+        return re.sub(r"[^a-z0-9àèéìòù]+", " ", str(text).lower()).strip()
+
+    def _needs_formal_report(self, user_message: str) -> bool:
+        normalized = user_message.lower()
+        return any(
+            term in normalized
+            for term in (
+                "executive summary",
+                "report formale",
+                "rapporto formale",
+                "analisi formale",
+                "business report",
+                "formato executive",
+            )
+        )
+
+    def _fallback_role_point(self, title: str) -> str:
+        fallbacks = {
+            "Strategic Readout": "La richiesta richiede una scelta strategica collegata a crescita, monetizzazione o posizionamento.",
+            "Analysis": "Il punto va valutato rispetto a obiettivi, risorse disponibili e impatto misurabile.",
+            "Growth Diagnosis": "La crescita dipende da chiarezza del format, retention e coerenza della distribuzione.",
+            "Growth Levers": "Le leve principali sono hook, frequenza, format ricorrenti, prova sociale e CTA.",
+            "Ready-to-Publish Content": "Serve trasformare la richiesta in un asset concreto con hook, corpo e CTA.",
+            "Content Framework": "Il framework minimo e hook, valore, prova e CTA.",
+            "Executive Dashboard": "Gli obiettivi vanno letti come priorita operative, non come lista statica.",
+            "Progress & Priorities": "Il progresso va misurato con una metrica semplice e aggiornata.",
+            "Execution Priorities": "La priorita e chiudere il task con maggiore impatto sugli obiettivi attivi.",
+            "Operating Notes": "Riduci contesto e aumenta esecuzione su un output concreto.",
+            "Decision Context": "La decisione va valutata su upside, costo, rischio e reversibilita.",
+            "Options & Tradeoffs": "Confronta opzione rapida, opzione conservativa e costo del non decidere.",
+            "Advisory Recommendation": "Scegli l'opzione che crea apprendimento misurabile con rischio controllato.",
+        }
+        return fallbacks.get(title, "Trasforma questo punto in un'azione concreta e misurabile.")
+
+    def _default_next_actions(self, intent: str, user_message: str, proposed: Any) -> list[str]:
+        points = self._coerce_points(proposed, limit=4)
+        joined = " ".join(points).lower()
+        if points and not any(fragment in joined for fragment in ("dimmi il canale", "dimmi se vuoi", user_message.lower())):
+            return points
+        if intent in {"strategy", "business_analysis"}:
+            return [
+                "Definisci l'offerta o leva di monetizzazione da validare.",
+                "Collega una CTA a un contenuto finance ad alto valore.",
+                "Misura lead, risposte o call generate entro 7 giorni.",
+            ]
+        if intent == "planning":
+            return [
+                "Scegli il risultato principale della settimana.",
+                "Dividilo in 3 blocchi operativi: contenuto, distribuzione, conversione.",
+                "Chiudi ogni blocco con una metrica semplice.",
+            ]
+        if intent == "advice":
+            if "newsletter" in user_message.lower():
+                return [
+                    "Lancia una versione pilota con promessa chiara e frequenza sostenibile.",
+                    "Misura aperture, risposte e click alla CTA per 2-3 invii.",
+                    "Decidi se scalare solo dopo segnali reali di interesse.",
+                ]
+            return [
+                "Definisci criterio di successo e rischio massimo accettabile.",
+                "Scegli un test piccolo e reversibile.",
+                "Rivaluta la decisione dopo il primo dato concreto.",
+            ]
+        if intent == "task_management":
+            return [
+                "Esegui prima il task con impatto piu vicino a revenue, audience o autorita.",
+                "Blocca 45-60 minuti senza cambiare contesto.",
+                "Aggiorna lo stato del task appena chiuso.",
+            ]
+        if intent == "goal_review":
+            return [
+                "Scegli l'obiettivo attivo piu importante per questa settimana.",
+                "Collega 2-3 task concreti a quell'obiettivo.",
+                "Aggiorna una metrica semplice di progresso.",
+            ]
+        return points or ["Definisci il prossimo task concreto e collegalo a un obiettivo attivo."]
+
+    def _render_role_header(self, role: str, markdown: bool) -> str:
+        text = f"Role: {role}"
+        if markdown:
+            return f"<b>{self._escape_html(text)}</b>"
+        return text
+
+    def _render_named_section(
+        self,
+        title: str,
+        points: list[str],
+        markdown: bool,
+        numbered: bool = False,
+        paragraph: bool = False,
+    ) -> str:
+        clean_points = self._dedupe_points([point for point in points if point])[:6]
+        if paragraph:
+            body = " ".join(clean_points[:2])
+            body = self._escape_html(body) if markdown else body
+        elif numbered:
+            body = "\n".join(
+                f"{index}. {self._escape_html(point) if markdown else point}"
+                for index, point in enumerate(clean_points, start=1)
+            )
+        else:
+            body = "\n".join(f"• {self._escape_html(point) if markdown else point}" for point in clean_points)
+
+        if markdown:
+            return f"<b>{self._escape_html(title)}</b>\n{body}"
+        return f"{title}\n{body}"
+
+    def _role_summary(self, user_message: str, direct_answer: str, intent: str, role: str) -> str:
+        direct_answer = self._compact_mobile_line(direct_answer, max_chars=220)
+        if intent == "content_creation":
+            return direct_answer or "Creo direttamente l'asset, senza girarci troppo intorno."
+        if intent == "strategy":
+            return direct_answer or "Partirei dal posizionamento: una strategia buona deve chiarire focus, canale e leva di crescita."
+        if intent == "goal_review":
+            return "Leggerei gli obiettivi come una dashboard: stato, priorita e prossima azione."
+        if intent == "task_management":
+            return "Qui serve ridurre la lista e scegliere cosa muove davvero il business oggi."
+        if intent == "planning":
+            return "Organizzerei il lavoro in pochi passaggi chiari, con output verificabile."
+        if intent == "business_analysis":
+            return direct_answer or "La lettura utile e quella che collega dati, rischio e prossima decisione."
+        if intent == "advice":
+            decision = re.sub(r"^(aiutami a decidere se|devo decidere se|decidere se)\s*", "", user_message.strip(), flags=re.IGNORECASE)
+            fallback = "serve scegliere l'opzione con piu apprendimento e meno dispersione."
+            return direct_answer or f"Io la guarderei cosi: {decision or fallback}"
+        return direct_answer or "Ti rispondo in modo diretto, usando solo il contesto rilevante."
+
+    def _role_recommendations(self, user_message: str, intent: str) -> list[str]:
+        if intent == "content_creation":
+            return [
+                "Tieni hook e CTA molto espliciti.",
+                "Se il contenuto parla di finance, punta su fiducia, chiarezza e utilita immediata.",
+            ]
+        if intent == "strategy":
+            return [
+                "Non partire dal canale: parti dal posizionamento e poi scegli il canale.",
+                "Trasforma la direzione in un test di 7 giorni, non in un piano infinito.",
+            ]
+        if intent == "goal_review":
+            return [
+                "Spingi solo sugli obiettivi che hanno metrica, priorita e task collegati.",
+                "Metti in pausa cio che non produce avanzamento visibile.",
+            ]
+        if intent == "task_management":
+            return [
+                "Esegui prima il task che crea output pubblico, lead o apprendimento.",
+                "Non aggiungere nuovi task finche non chiudi il primo blocco utile.",
+            ]
+        if intent == "planning":
+            return [
+                "Pianifica meno cose, ma con deliverable chiari.",
+                "Ogni blocco deve finire con qualcosa che si puo pubblicare, misurare o vendere.",
+            ]
+        if intent == "business_analysis":
+            return [
+                "Cerca il vincolo principale, non dieci micro-problemi.",
+                "Collega l'analisi a una decisione o a un test operativo.",
+            ]
+        if intent == "advice":
+            return [
+                "Scegli l'opzione piu reversibile se i dati sono ancora deboli.",
+                "Definisci subito quale segnale ti fara continuare, correggere o fermare.",
+            ]
+        return ["Usa questa risposta per fare il prossimo passo, non per accumulare altro contesto."]
+
+    def _ensure_ready_content(self, user_message: str, analysis: Any) -> list[str]:
+        points = self._coerce_points(analysis, limit=6)
+        normalized = user_message.lower()
+        if any(term in normalized for term in ("script", "tiktok", "reel", "short")) and not any("hook" in point.lower() for point in points):
+            return [
+                "Hook: Il problema non e quanto guadagni, ma quanto controllo hai sulle tue decisioni finanziarie.",
+                "Sviluppo: mostra un errore comune, spiega perche costa caro e dai una regola pratica in 3 passaggi.",
+                "CTA: Salva questo contenuto e scegli un'azione finanziaria da sistemare oggi.",
+            ]
+        if any(term in normalized for term in ("post", "linkedin", "newsletter")) and not points:
+            return [
+                "Apertura: una convinzione finanziaria comune che rallenta la crescita.",
+                "Corpo: 3 punti pratici con esempio concreto e implicazione per Michele/audience.",
+                "CTA: invita a rispondere con il dubbio finance piu urgente.",
+            ]
+        return points or ["Hook, struttura e CTA sono pronti per essere trasformati in asset pubblicabile."]
+
+    def _decision_tradeoffs(self, user_message: str, analysis: Any) -> list[str]:
+        normalized = user_message.lower()
+        if "newsletter" in normalized:
+            return [
+                "Opzione 1: lanciare una newsletter leggera per validare interesse, promessa e CTA.",
+                "Opzione 2: rimandare finche posizionamento, calendario contenuti e offerta non sono piu chiari.",
+                "Tradeoff: partire ora accelera feedback, ma richiede una metrica semplice per evitare lavoro dispersivo.",
+            ]
+        points = self._coerce_points(analysis, limit=4)
+        if points:
+            return points
+        return [
+            "Valuta upside, costo operativo, reversibilita e impatto sugli obiettivi attivi.",
+            "Scegli l'opzione che produce apprendimento misurabile con il minor costo irreversibile.",
+        ]
+
+    def _content_framework_points(self, ready_content: Any) -> list[str]:
+        points = self._coerce_points(ready_content, limit=4)
+        framework = [
+            "Hook: apri con problema specifico o errore finance riconoscibile.",
+            "Value: consegna un framework semplice, concreto e applicabile.",
+            "Proof: usa esempio, micro-caso o numero per aumentare fiducia.",
+            "CTA: collega il contenuto a salvataggio, risposta, lead magnet o consulenza.",
+        ]
+        if any("hook" in point.lower() for point in points):
+            return framework
+        return framework[:3]
 
     def _render_executive_response(
         self,
@@ -414,6 +870,7 @@ class ResponseFormatter:
         text = re.sub(r"\b(id|source_task_id|matched_keywords|score|created_at|updated_at|completed_at):\s*[^-]+", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\btarget=", "target: ", text, flags=re.IGNORECASE)
         text = re.sub(r"\bprogress=", "progresso: ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bACTIVE GOALS\b", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\[([^\]]+)\]", r"(\1)", text)
         text = re.sub(r"\s+-\s+-\s+", " - ", text)
         return text.strip(" -")
@@ -431,6 +888,12 @@ class ResponseFormatter:
 
     def _clean_text(self, text: str) -> str:
         text = self._structured_to_text(text)
+        text = "\n".join(line for line in text.splitlines() if "ACTIVE GOALS" not in line.upper())
+        text = "\n".join(
+            line
+            for line in text.splitlines()
+            if not re.search(r"\([a-z_]+/(yearly|quarterly|monthly|weekly)/(critical|high|medium|low)\)", line, flags=re.IGNORECASE)
+        )
         text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
         text = re.sub(r"`([^`]+)`", r"\1", text)
         text = re.sub(r"#{1,6}\s*", "", text)
@@ -441,6 +904,7 @@ class ResponseFormatter:
         text = re.sub(r"\[([^\]]+)\]", r"(\1)", text)
         text = re.sub(r"\btarget=", "target: ", text, flags=re.IGNORECASE)
         text = re.sub(r"\bprogress=", "progresso: ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bACTIVE GOALS\b", "", text, flags=re.IGNORECASE)
         text = self._strip_raw_structure_tokens(text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"[ \t]{2,}", " ", text)
@@ -514,10 +978,15 @@ class ResponseFormatter:
     def _extract_key_points(self, text: str, limit: int, exclude_text: str = "") -> list[str]:
         points: list[str] = []
         exclude_lower = exclude_text.lower()
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
+        candidates: list[str] = []
+        for raw_line in text.splitlines():
+            raw_line = raw_line.strip()
+            if not raw_line:
                 continue
+            split_items = re.split(r"(?<=[.!?])\s+(?=(?:\d+[.)]\s+)?[A-ZÀ-Ù])", raw_line)
+            candidates.extend(item.strip() for item in split_items if item.strip())
+
+        for line in candidates:
             line = re.sub(r"^[-\d. )]+", "", line).strip()
             line = self._remove_internal_labels(line)
             normalized_line = line.lower().strip(" :")
@@ -587,6 +1056,17 @@ class ResponseFormatter:
                     break
 
         return self._dedupe_points(points)[:limit]
+
+    def _extract_inline_numbered_points(self, text: str, limit: int) -> list[str]:
+        matches = re.findall(r"(?:^|\s)\d+[.)]\s+(.+?)(?=\s+\d+[.)]\s+|$)", text.strip(), flags=re.DOTALL)
+        points = []
+        for match in matches:
+            point = self._clean_point(match)
+            if self._is_useful_sentence(point):
+                points.append(point)
+            if len(points) >= limit:
+                break
+        return self._dedupe_points(points)
 
     def _next_step(self, user_message: str, text: str) -> str:
         normalized = user_message.lower()
@@ -936,6 +1416,7 @@ class ResponseFormatter:
             "tasks:",
             "agent instructions:",
             "active strategic goals",
+            "active goals",
             "usa queste memorie",
             "non contraddire",
             "task:",

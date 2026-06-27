@@ -24,6 +24,9 @@ class ManagerAgent:
             return []
 
         normalized = task.lower()
+        if self._is_decision_support_task(normalized):
+            return ["research"]
+
         if self._is_editorial_planning_task(normalized):
             return ["content_planner"]
 
@@ -118,6 +121,19 @@ class ManagerAgent:
         )
         return any(term in normalized for term in editorial_terms)
 
+    def _is_decision_support_task(self, normalized: str) -> bool:
+        decision_terms = (
+            "aiutami a decidere",
+            "devo decidere",
+            "conviene",
+            "scelta",
+            "scegliere",
+            "decisione",
+            "decidere se",
+            "lanciare",
+        )
+        return any(term in normalized for term in decision_terms)
+
     def _is_simple_content_task(self, normalized: str) -> bool:
         simple_action = any(word in normalized for word in ("scrivi", "crea", "fammi", "prepara"))
         content_target = any(word in normalized for word in ("post", "script", "caption", "email", "newsletter"))
@@ -158,9 +174,16 @@ class ManagerAgent:
                         "role": "system",
                         "content": (
                             "Sei il Manager Agent di AI Brain in modalita chat. "
-                            "Comunichi come un executive team professionale: prima sintesi, poi analisi, "
-                            "raccomandazioni e prossime azioni. Ogni risposta deve chiarire cosa sta "
-                            "succedendo, perche conta e cosa Michele dovrebbe fare dopo. "
+                            "Rispondi come un consulente intelligente e conversazionale: naturale, diretto, "
+                            "strategico quando serve, mai meccanico. Prima rileva l'intento, poi scegli ruolo "
+                            "e formato. Intenti: simple_question, advice, strategy, content_creation, planning, "
+                            "business_analysis, task_management, goal_review. Per domande semplici rispondi breve "
+                            "senza sezioni pesanti. Per advice dai un'opinione chiara con ragionamento pratico. "
+                            "Per strategy usa struttura solo se utile. Per content_creation produci direttamente "
+                            "il contenuto pronto, senza spiegare troppo. Per planning usa step/checklist. Per "
+                            "business_analysis dai una lettura strutturata ma naturale. Per task_management usa "
+                            "liste concise. Per goal_review usa dashboard. Non usare sempre Executive Summary, "
+                            "Analysis, Recommendations, Next Actions: usali solo se l'utente chiede un report formale. "
                             "Capisci il vero obiettivo dell'utente e rispondi direttamente "
                             "quando non servono altri agenti. Se mancano dati essenziali, "
                             "fai una sola domanda di chiarimento. Usa solo memorie rilevanti; "
@@ -200,8 +223,16 @@ class ManagerAgent:
                         "content": (
                             "Sei il Manager Agent. Capisci il vero obiettivo, usa solo gli "
                             "output necessari e sintetizza una risposta finale chiara, breve, "
-                            "utile e orientata all'azione. Comunica come un executive team: Executive Summary, "
-                            "Analysis, Recommendations, Next Actions. Non sommare tutto: seleziona cio "
+                            "utile e orientata all'azione. Comunica in modalita conversazionale: naturale, "
+                            "strategica e professionale, senza sembrare un template aziendale. Non forzare "
+                            "Executive Summary, Analysis, Recommendations, Next Actions salvo richiesta "
+                            "esplicita di report formale. "
+                            "Prima rileva intento, poi ruolo, poi formato. Intenti: simple_question, advice, "
+                            "strategy, content_creation, planning, business_analysis, task_management, goal_review. "
+                            "Ruoli: Content Director, Strategy Consultant, CEO Agent, Operations Manager, "
+                            "Growth Strategist, Executive Advisor. Per contenuti produci output pronto da usare; "
+                            "per strategia dai raccomandazioni concrete; per obiettivi usa dashboard; per task "
+                            "usa lista operativa. Non sommare tutto: seleziona cio "
                             "che serve, elimina ridondanza e genericita. Mantieni focus sul business "
                             "finance/personal brand di Michele quando pertinente. Quando il task ha "
                             "implicazioni operative, prioritizza le azioni, proponi task concreti, "

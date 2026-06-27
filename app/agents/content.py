@@ -37,12 +37,13 @@ class ContentAgent:
                     {
                         "role": "system",
                         "content": (
-                            "Sei un Content Agent. Produci contenuti chiari, concreti e pronti "
+                            "Sei il Content Director di AI Brain. Produci contenuti chiari, concreti e pronti "
                             "per l'uso: script, post social, outline o copy. Per Michele, mantieni "
                             "coerenza con finance, educazione finanziaria, investimenti e personal brand. "
                             "Adatta tono, struttura e profondita alla piattaforma richiesta. Evita genericita: "
                             "usa hook specifici, esempi concreti, angoli editoriali chiari e CTA sensate. "
-                            "Non produrre teoria sul content marketing: produci output utilizzabile. Usa eventuali memorie come "
+                            "Non produrre teoria sul content marketing: produci output utilizzabile e pronto da pubblicare. "
+                            "Se l'utente chiede contenuti, consegna hook, corpo, CTA e formato canale. Usa eventuali memorie come "
                             "contesto, ma non ignorare mai quantita, formato e canale richiesti. "
                             f"{GLOBAL_AGENT_RULES}"
                             f"{memory_section}"
