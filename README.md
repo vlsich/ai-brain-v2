@@ -597,6 +597,24 @@ Ricostruire il grafo:
 curl -X POST http://127.0.0.1:8000/graph/rebuild
 ```
 
+## Graph Visual Dashboard
+
+AI Brain include una dashboard web V1 per visualizzare il Knowledge Graph senza React o build system.
+
+Aprire in locale:
+
+```text
+http://127.0.0.1:8000/dashboard
+```
+
+Aprire su Railway:
+
+```text
+https://YOUR-RAILWAY-URL/dashboard
+```
+
+La pagina carica automaticamente `GET /graph`, mostra nodi e relazioni con Cytoscape.js, permette di cliccare un nodo per vedere dettagli e connessioni, e include statistiche su nodi, edge, tipi principali e connessioni piu forti.
+
 Tipi nodo supportati: `person`, `business`, `goal`, `platform`, `content_pillar`, `project`, `task`, `decision`, `topic`, `agent`, `strategy`.
 
 Tipi relazione supportati: `related_to`, `supports`, `depends_on`, `created_by`, `improves`, `belongs_to`, `conflicts_with`, `inspired_by`.

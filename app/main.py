@@ -5,12 +5,14 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.brain_core import BrainCore
 from app.config import get_settings
+from app.dashboard import DASHBOARD_HTML
 from app.database import SessionLocal, get_db, init_db
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
@@ -307,6 +309,11 @@ def health(db: Session = Depends(get_db)) -> dict[str, str]:
         "environment": settings.app_env,
         "database": database_status,
     }
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard() -> HTMLResponse:
+    return HTMLResponse(content=DASHBOARD_HTML)
 
 
 @app.post("/task", response_model=TaskResponse)
