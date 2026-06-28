@@ -549,6 +549,9 @@ class ResponseFormatter:
                 "proactive daily business briefing",
                 "goal to content weekly execution plan",
                 "decision support framework",
+                "second brain update",
+                "second brain related concepts",
+                "brain state summary",
             )
         )
 

@@ -6,7 +6,7 @@ from typing import Any, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models import Decision, Goal, KnowledgeEdge, KnowledgeNode, LongTermMemory
+from app.models import Decision, Goal, KnowledgeEdge, KnowledgeNode, LongTermMemory, ProductivityTask
 
 
 FOUNDATION_NODES = [
@@ -53,7 +53,7 @@ class KnowledgeGraph:
 
     def refresh_from_current_state(self, limit: int = 80) -> dict[str, int]:
         self.seed_foundation()
-        counts = {"goals": 0, "decisions": 0, "memories": 0}
+        counts = {"goals": 0, "decisions": 0, "memories": 0, "projects": 0}
         for goal in self.db.query(Goal).order_by(Goal.updated_at.desc()).limit(limit).all():
             node, created = self.get_or_create_node(goal.title, "goal", goal.description, self._importance_from_priority(goal.priority))
             counts["goals"] += int(created)
@@ -72,6 +72,20 @@ class KnowledgeGraph:
             if decision.related_topic:
                 topic = self.get_or_create_node(decision.related_topic, "topic", "", 3)[0]
                 self.connect(node, topic, "relates_to", strength=3)
+
+        project_names = (
+            self.db.query(ProductivityTask.related_project)
+            .filter(ProductivityTask.related_project.isnot(None))
+            .distinct()
+            .limit(limit)
+            .all()
+        )
+        for project in project_names:
+            if not project.related_project:
+                continue
+            node, created = self.get_or_create_node(project.related_project, "project", "Progetto operativo collegato ai task di Michele.", 3)
+            counts["projects"] += int(created)
+            self.connect(self.get_or_create_node("Michele", "person")[0], node, "works_on", strength=3)
 
         for memory in self.db.query(LongTermMemory).order_by(LongTermMemory.importance.desc()).limit(limit).all():
             counts["memories"] += int(self.ingest_memory(memory))

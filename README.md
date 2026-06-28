@@ -234,6 +234,11 @@ Esempi di messaggi:
 - `Preparami la giornata`
 - `Dammi il focus di oggi`
 - `Dammi idee contenuto`
+- `Cosa sai di me?`
+- `Mostrami il mio brain state`
+- `Aggiorna il mio second brain`
+- `Quali concetti sono collegati?`
+- `Cosa sto costruendo?`
 - `Quali task devo fare oggi?`
 - `Briefing giornaliero`
 - `Review settimanale`
@@ -478,7 +483,14 @@ Categorie di memoria a lungo termine:
 
 ## Brain Core
 
-`BrainCore` trasforma la memoria lunga in un cervello persistente. Mantiene un `Brain State Summary` sempre aggiornato con identita, business profile, obiettivi, priorita, posizionamento, preferenze, decisioni e istruzioni agenti.
+`BrainCore` trasforma la memoria lunga in un cervello persistente. Mantiene un `Brain State Summary` sempre aggiornato con identita, business profile, obiettivi attivi, priorita correnti, progetti, brand positioning, stile di lavoro, content pillars e decisioni strategiche.
+
+Il Second Brain aggiunge:
+
+- `SemanticMemory`: indicizza le memorie con embeddings OpenAI quando disponibili, con fallback locale SQLite.
+- `KnowledgeGraph`: crea nodi e relazioni tra Michele, business, goal, topic, platform, content pillars, decisioni e progetti.
+- retrieval prima di ogni risposta con Brain State, memorie semantiche, obiettivi, task e decisioni recenti.
+- aggiornamento automatico dopo conversazioni importanti tramite Memory Curator.
 
 Tipi memoria canonici:
 
@@ -532,12 +544,39 @@ curl -X POST http://127.0.0.1:8000/memory/search \
   -d '{"query":"TikTok","limit":5}'
 ```
 
+Cercare memorie semantiche:
+
+```bash
+curl -X POST http://127.0.0.1:8000/memory/semantic/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"crescita personal brand finance","limit":5}'
+```
+
+Leggere concetti collegati:
+
+```bash
+curl "http://127.0.0.1:8000/brain/concepts?query=TikTok&limit=10"
+```
+
+Comandi Telegram/Chat per il Second Brain:
+
+- `cosa sai di me?`
+- `mostrami il mio brain state`
+- `aggiorna il mio second brain`
+- `quali concetti sono collegati?`
+- `cosa sto costruendo?`
+
 ## Memory Retrieval
 
-Prima di eseguire un nuovo task, l'orchestrator recupera automaticamente fino a 7 memorie rilevanti usando:
+Prima di eseguire un nuovo task, l'orchestrator recupera automaticamente:
 
 - overlap di keyword tra task e memoria
 - similarita testuale semplice
+- memorie semantiche tramite embeddings o fallback locale
+- Brain State Summary
+- obiettivi attivi
+- decisioni recenti
+- task rilevanti
 - piccolo boost basato su `importance`
 - priorita per `user_profile`, `business_goals`, `brand_positioning`, `preferences` e `content_strategy`
 - deduplica leggera per ridurre memoria ridondante

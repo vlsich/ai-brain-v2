@@ -15,10 +15,12 @@ from app.database import SessionLocal, get_db, init_db
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
+from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.models import DailyReview, WeeklyReview
 from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
+from app.semantic_memory import SemanticMemory
 from app.task_engine import TaskEngine
 
 
@@ -80,6 +82,11 @@ class MemorySearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
     memory_type: Optional[str] = None
     limit: int = Field(default=20, ge=1, le=100)
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    limit: int = Field(default=6, ge=1, le=20)
 
 
 class BrainSeedMemory(BaseModel):
@@ -274,6 +281,8 @@ def on_startup() -> None:
         GoalEngine(db).ensure_default_goals()
         Memory(db).ensure_core_memories()
         BrainCore(db).seed()
+        SemanticMemory(db).sync_from_long_term_memory()
+        KnowledgeGraph(db).refresh_from_current_state()
     finally:
         db.close()
 
@@ -358,9 +367,21 @@ def search_memory(payload: MemorySearchRequest, db: Session = Depends(get_db)) -
     )
 
 
+@app.post("/memory/semantic/search")
+def search_semantic_memory(payload: SemanticSearchRequest, db: Session = Depends(get_db)) -> list[dict]:
+    return SemanticMemory(db).retrieve(payload.query, limit=payload.limit)
+
+
 @app.get("/brain/state")
 def get_brain_state(db: Session = Depends(get_db)) -> dict:
     return BrainCore(db).get_state_summary()
+
+
+@app.get("/brain/concepts")
+def get_related_concepts(query: str = "", limit: int = 12, db: Session = Depends(get_db)) -> dict:
+    graph = KnowledgeGraph(db)
+    graph.refresh_from_current_state(limit=80)
+    return {"concepts": graph.related_concepts(query=query, limit=limit)}
 
 
 @app.post("/brain/seed")

@@ -22,7 +22,7 @@ class SemanticMemory:
         self.db = db
         self.settings = get_settings()
         self.client = (
-            OpenAI(api_key=self.settings.openai_api_key, timeout=self.settings.openai_timeout_seconds)
+            OpenAI(api_key=self.settings.openai_api_key, timeout=self.settings.openai_timeout_seconds, max_retries=0)
             if self.settings.openai_api_key
             else None
         )
@@ -173,7 +173,7 @@ class SemanticMemory:
                 )
                 return [float(value) for value in response.data[0].embedding]
             except Exception:
-                logger.exception("OpenAI embedding failed, using local semantic fallback")
+                logger.warning("OpenAI embedding failed, using local semantic fallback")
         return self._local_embedding(text)
 
     def _local_embedding(self, text: str, dimensions: int = 256) -> list[float]:

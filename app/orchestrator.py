@@ -22,9 +22,11 @@ from app.decision_engine import DecisionEngine
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
+from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.proactive_loop import GoalToContentPipeline, ProactiveBrainLoop
 from app.role_router import RoleRouter
+from app.semantic_memory import SemanticMemory
 from app.task_engine import TaskEngine
 
 
@@ -36,6 +38,8 @@ class Orchestrator:
         self.settings = get_settings()
         self.memory = Memory(db)
         self.brain_core = BrainCore(db)
+        self.semantic_memory = SemanticMemory(db)
+        self.knowledge_graph = KnowledgeGraph(db)
         self.conversation_state = ConversationStateManager(db, chat_id=chat_id)
         self.role_router = RoleRouter()
         self.manager = ManagerAgent(self.settings)
@@ -50,6 +54,7 @@ class Orchestrator:
         self.decision_engine = DecisionEngine(db)
         self.goal_engine = GoalEngine(db)
         self.goal_engine.ensure_default_goals()
+        self.knowledge_graph.seed_foundation()
         self.proactive_loop = ProactiveBrainLoop(db)
         self.goal_content_pipeline = GoalToContentPipeline(db)
         self.daily_review_agent = DailyReviewAgent(self.settings)
@@ -80,11 +85,21 @@ class Orchestrator:
 
         try:
             retrieved_memories = self.memory.retrieve_relevant_memories(effective_prompt, limit=7)
+            semantic_memories = self.semantic_memory.retrieve(effective_prompt, limit=5)
+            recent_decisions = self.decision_journal.latest_decisions(limit=5)
+            relevant_tasks = self._relevant_tasks_for_prompt(effective_prompt)
             brain_context = "\n\n".join(
-                part for part in (self.brain_core.context_for_agents(), self.goal_engine.goal_context()) if part
+                part
+                for part in (
+                    self.brain_core.context_for_agents(),
+                    self.goal_engine.goal_context(),
+                    self._second_brain_retrieval_context(semantic_memories, recent_decisions, relevant_tasks),
+                )
+                if part
             )
             role_context = self.role_router.context_for_prompt(role_spec)
             memory_context = self._build_agent_context(brain_context, retrieved_memories, conversation.context, role_context)
+            all_retrieved_memories = self._dedupe_memory_results(retrieved_memories + semantic_memories)
             productivity_result = self._handle_productivity_command(effective_prompt, brain_context, memory_context)
             if productivity_result:
                 final_answer = productivity_result["final_answer"]
@@ -113,18 +128,18 @@ class Orchestrator:
                     "agents_used": [agent_name, "manager"],
                     "final_answer": final_answer,
                     "results": {agent_name: final_answer},
-                    "memories_used": self._serialize_retrieved_memories(retrieved_memories),
-                    "agents_used_memory": [agent_name, "manager"] if retrieved_memories else [],
+                    "memories_used": self._serialize_retrieved_memories(all_retrieved_memories),
+                    "agents_used_memory": [agent_name, "manager"] if all_retrieved_memories else [],
                     "memories_saved": len(saved_memories),
                     "format_message": productivity_result.get("format_message", effective_prompt),
                 }
 
             agents_to_use = self._agents_for_prompt(effective_prompt, conversation, role_spec)
             results: dict[str, str] = {}
-            agents_used_memory = agents_to_use + ["manager"] if retrieved_memories else []
+            agents_used_memory = agents_to_use + ["manager"] if all_retrieved_memories else []
 
             logger.info("Agent routing: agents_used=%s", ", ".join(agents_to_use) or "manager")
-            self._log_retrieved_memories(retrieved_memories, agents_used_memory)
+            self._log_retrieved_memories(all_retrieved_memories, agents_used_memory)
 
             if chat_mode and not agents_to_use:
                 final_answer = self.manager.respond_directly(effective_prompt, memory_context=memory_context)
@@ -153,8 +168,8 @@ class Orchestrator:
                     "agents_used": ["manager"],
                     "final_answer": final_answer,
                     "results": {},
-                    "memories_used": self._serialize_retrieved_memories(retrieved_memories),
-                    "agents_used_memory": ["manager"] if retrieved_memories else [],
+                    "memories_used": self._serialize_retrieved_memories(all_retrieved_memories),
+                    "agents_used_memory": ["manager"] if all_retrieved_memories else [],
                     "memories_saved": len(saved_memories),
                     "format_message": effective_prompt,
                 }
@@ -225,7 +240,7 @@ class Orchestrator:
                 "agents_used": agents_to_use,
                 "final_answer": final_answer,
                 "results": results,
-                "memories_used": self._serialize_retrieved_memories(retrieved_memories),
+                "memories_used": self._serialize_retrieved_memories(all_retrieved_memories),
                 "agents_used_memory": agents_used_memory,
                 "memories_saved": len(saved_memories),
                 "format_message": effective_prompt,
@@ -249,16 +264,19 @@ class Orchestrator:
             agent_outputs=results,
             final_answer=final_answer,
         )
-        return [
-            self.memory.save_long_term_memory(
+        saved = []
+        for memory_item in curated_memories:
+            long_term_memory = self.memory.save_long_term_memory(
                 memory_type=memory_item["memory_type"],
                 title=memory_item["title"],
                 content=memory_item["content"],
                 importance=memory_item["importance"],
                 source_task_id=task_id,
             )
-            for memory_item in curated_memories
-        ]
+            saved.append(long_term_memory)
+            self.semantic_memory.remember_curated_memory(long_term_memory)
+            self.knowledge_graph.ingest_memory(long_term_memory)
+        return saved
 
     def _format_memory_context(self, memories: list[dict[str, Any]]) -> str:
         return self.memory.build_context_from_memory(memories)
@@ -296,6 +314,49 @@ class Orchestrator:
         if memory_context:
             parts.append(memory_context)
         return "\n\n".join(parts)
+
+    def _second_brain_retrieval_context(self, semantic_memories: list[dict[str, Any]], decisions: list, tasks: list) -> str:
+        parts = []
+        semantic_context = self.semantic_memory.build_context(semantic_memories)
+        if semantic_context:
+            parts.append(semantic_context)
+        if decisions:
+            decision_lines = [
+                f"- {decision.title}: {decision.decision[:220]}"
+                for decision in decisions[:5]
+            ]
+            parts.append("RECENT STRATEGIC DECISIONS\n" + "\n".join(decision_lines))
+        if tasks:
+            task_lines = [
+                f"- {task.title} [{task.priority}] goal={task.related_goal or 'da collegare'} topic={task.related_topic or 'n/a'}"
+                for task in tasks[:6]
+            ]
+            parts.append("RELEVANT TASKS\n" + "\n".join(task_lines))
+        return "\n\n".join(parts)
+
+    def _relevant_tasks_for_prompt(self, prompt: str) -> list:
+        tokens = set(re.findall(r"[a-zA-ZÀ-ÿ0-9_]{3,}", prompt.lower()))
+        tasks = self.task_engine.list_pending_tasks(limit=30)
+        scored = []
+        for task in tasks:
+            text = f"{task.title} {task.description} {task.category} {task.related_goal or ''} {task.related_topic or ''}".lower()
+            task_tokens = set(re.findall(r"[a-zA-ZÀ-ÿ0-9_]{3,}", text))
+            overlap = len(tokens.intersection(task_tokens))
+            priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(task.priority, 2)
+            if overlap or any(term in text for term in ("finance", "contenut", "brand", "audience", "monet")):
+                scored.append((overlap, priority, task))
+        return [item[2] for item in sorted(scored, key=lambda item: (item[0], item[1]), reverse=True)[:6]]
+
+    def _dedupe_memory_results(self, memories: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped = []
+        seen = set()
+        for memory in sorted(memories, key=lambda item: item.get("score", 0), reverse=True):
+            key = (memory.get("retrieval", "keyword"), memory.get("id"), memory.get("memory_type"))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(memory)
+        return deduped[:10]
 
     def _update_conversation_state(
         self,
@@ -347,6 +408,10 @@ class Orchestrator:
         memory_context: str,
     ) -> dict[str, str] | None:
         normalized = prompt.lower().strip()
+
+        second_brain_result = self._handle_second_brain_command(prompt, normalized)
+        if second_brain_result:
+            return second_brain_result
 
         goal_result = self._handle_goal_command(prompt, normalized)
         if goal_result:
@@ -455,6 +520,46 @@ class Orchestrator:
                     f"{self._format_goal_aligned_tasks(tasks, 'Nessun task pendente salvato per oggi.')}\n\n"
                     "Prossimo passo: chiudi il primo task prima di aprire nuove idee."
                 ),
+            }
+
+        return None
+
+    def _handle_second_brain_command(self, prompt: str, normalized: str) -> dict[str, str] | None:
+        if self._is_update_second_brain_command(normalized):
+            semantic_count = self.semantic_memory.sync_from_long_term_memory()
+            graph_counts = self.knowledge_graph.refresh_from_current_state()
+            state = self.brain_core.update_state_summary()
+            return {
+                "agent_name": "second_brain",
+                "final_answer": (
+                    "Second Brain aggiornato.\n\n"
+                    f"- Memorie semantiche indicizzate: {semantic_count}\n"
+                    f"- Nodi obiettivi aggiornati: {graph_counts['goals']}\n"
+                    f"- Nodi decisioni aggiornati: {graph_counts['decisions']}\n"
+                    f"- Nodi progetti aggiornati: {graph_counts['projects']}\n"
+                    f"- Nodi memoria aggiornati: {graph_counts['memories']}\n"
+                    f"- Brain State version: {state['version']}\n\n"
+                    "Da ora il brain usera questo contesto prima di rispondere."
+                ),
+                "format_message": "second brain update",
+            }
+
+        if self._is_related_concepts_command(normalized):
+            self.knowledge_graph.refresh_from_current_state(limit=60)
+            query = self._strip_second_brain_command(prompt)
+            concepts = self.knowledge_graph.related_concepts(query=query, limit=12)
+            return {
+                "agent_name": "knowledge_graph",
+                "final_answer": self.knowledge_graph.format_related_concepts(concepts),
+                "format_message": "second brain related concepts",
+            }
+
+        if self._is_brain_state_command(normalized):
+            state = self.brain_core.get_state_summary()
+            return {
+                "agent_name": "brain_core",
+                "final_answer": self._format_brain_state_for_chat(state["summary"]),
+                "format_message": "brain state summary",
             }
 
         return None
@@ -577,6 +682,75 @@ class Orchestrator:
             "focus di oggi",
         )
         return any(pattern in normalized for pattern in patterns)
+
+    def _is_brain_state_command(self, normalized: str) -> bool:
+        patterns = (
+            "cosa sai di me",
+            "mostrami il mio brain state",
+            "mostra il mio brain state",
+            "brain state",
+            "cosa sto costruendo",
+            "chi sono",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_update_second_brain_command(self, normalized: str) -> bool:
+        patterns = (
+            "aggiorna il mio second brain",
+            "aggiorna second brain",
+            "aggiorna il cervello",
+            "sincronizza second brain",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_related_concepts_command(self, normalized: str) -> bool:
+        patterns = (
+            "quali concetti sono collegati",
+            "concetti collegati",
+            "relazioni del brain",
+            "knowledge graph",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _strip_second_brain_command(self, prompt: str) -> str:
+        cleaned = prompt
+        for pattern in (
+            "quali concetti sono collegati",
+            "concetti collegati",
+            "relazioni del brain",
+            "knowledge graph",
+        ):
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+        return cleaned.strip(" :?")[:120]
+
+    def _format_brain_state_for_chat(self, summary: str) -> str:
+        lines = [line.strip() for line in summary.splitlines() if line.strip()]
+        important = []
+        preferred_sections = (
+            "Identita:",
+            "Business profile:",
+            "Active strategic goals:",
+            "Current priorities:",
+            "Current projects:",
+            "Brand positioning:",
+            "Preferenze:",
+            "Content pillars:",
+            "Strategic decisions:",
+        )
+        for prefix in preferred_sections:
+            match = next((line for line in lines if line.startswith(prefix)), "")
+            if match:
+                important.append(match)
+
+        if not important:
+            important = lines[:8]
+
+        readable = ["Questo e cio che so oggi del tuo Second Brain:"]
+        for item in important[:9]:
+            title, _, content = item.partition(":")
+            readable.append(f"\n{title}:\n{content.strip()}")
+        readable.append("\nProssimo passo:\nSe vuoi, posso aggiornare il Second Brain e ricostruire memorie semantiche e relazioni.")
+        return "\n".join(readable)
 
     def _is_goal_to_content_command(self, normalized: str) -> bool:
         patterns = (

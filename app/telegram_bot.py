@@ -12,9 +12,11 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from app.brain_core import BrainCore
 from app.config import get_settings
 from app.database import SessionLocal, init_db
+from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
+from app.semantic_memory import SemanticMemory
 
 
 logger = logging.getLogger(__name__)
@@ -201,6 +203,8 @@ def main() -> None:
     try:
         Memory(db).ensure_core_memories()
         BrainCore(db).seed()
+        SemanticMemory(db).sync_from_long_term_memory()
+        KnowledgeGraph(db).refresh_from_current_state()
     finally:
         db.close()
     application = build_application()
