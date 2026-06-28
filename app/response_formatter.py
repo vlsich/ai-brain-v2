@@ -554,6 +554,7 @@ class ResponseFormatter:
                 "brain state summary",
                 "knowledge graph summary",
                 "knowledge graph rebuild",
+                "graph intelligence insights",
             )
         )
 

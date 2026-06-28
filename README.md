@@ -569,6 +569,9 @@ Endpoint disponibili:
 - `GET /graph`
 - `GET /graph/search?q=...`
 - `POST /graph/rebuild`
+- `GET /graph/insights`
+- `GET /graph/clusters`
+- `GET /graph/gaps`
 
 Export completo:
 
@@ -595,6 +598,14 @@ Ricostruire il grafo:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/graph/rebuild
+```
+
+Analizzare il grafo:
+
+```bash
+curl http://127.0.0.1:8000/graph/insights
+curl http://127.0.0.1:8000/graph/clusters
+curl http://127.0.0.1:8000/graph/gaps
 ```
 
 ## Graph Visual Dashboard
@@ -629,6 +640,10 @@ Comandi Telegram/Chat per il Second Brain:
 - `cosa e collegato al mio business?`
 - `quali nodi ci sono nel mio brain?`
 - `ricostruisci il knowledge graph`
+- `analizza il mio brain`
+- `cosa manca nel mio brain?`
+- `quali sono i nodi piu importanti?`
+- `quali opportunita vedi?`
 - `cosa sto costruendo?`
 
 ## Memory Retrieval

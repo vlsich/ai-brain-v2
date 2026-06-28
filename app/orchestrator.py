@@ -22,6 +22,7 @@ from app.decision_engine import DecisionEngine
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
+from app.graph_intelligence import GraphIntelligence
 from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.proactive_loop import GoalToContentPipeline, ProactiveBrainLoop
@@ -40,6 +41,7 @@ class Orchestrator:
         self.brain_core = BrainCore(db)
         self.semantic_memory = SemanticMemory(db)
         self.knowledge_graph = KnowledgeGraph(db)
+        self.graph_intelligence = GraphIntelligence(db)
         self.conversation_state = ConversationStateManager(db, chat_id=chat_id)
         self.role_router = RoleRouter()
         self.manager = ManagerAgent(self.settings)
@@ -525,6 +527,10 @@ class Orchestrator:
         return None
 
     def _handle_second_brain_command(self, prompt: str, normalized: str) -> dict[str, str] | None:
+        graph_intelligence_result = self._handle_graph_intelligence_command(normalized)
+        if graph_intelligence_result:
+            return graph_intelligence_result
+
         if self._is_rebuild_knowledge_graph_command(normalized):
             result = self.knowledge_graph.rebuild(limit=250)
             return {
@@ -578,6 +584,41 @@ class Orchestrator:
                 "agent_name": "brain_core",
                 "final_answer": self._format_brain_state_for_chat(state["summary"]),
                 "format_message": "brain state summary",
+            }
+
+        return None
+
+    def _handle_graph_intelligence_command(self, normalized: str) -> dict[str, str] | None:
+        if self._is_graph_gap_command(normalized):
+            payload = self.graph_intelligence.insights(limit=10)
+            return {
+                "agent_name": "graph_intelligence",
+                "final_answer": self.graph_intelligence.format_insights(payload, intent="gaps"),
+                "format_message": "graph intelligence insights",
+            }
+
+        if self._is_graph_important_nodes_command(normalized):
+            payload = self.graph_intelligence.insights(limit=10)
+            return {
+                "agent_name": "graph_intelligence",
+                "final_answer": self.graph_intelligence.format_insights(payload, intent="important_nodes"),
+                "format_message": "graph intelligence insights",
+            }
+
+        if self._is_graph_opportunity_command(normalized):
+            payload = self.graph_intelligence.insights(limit=10)
+            return {
+                "agent_name": "graph_intelligence",
+                "final_answer": self.graph_intelligence.format_insights(payload, intent="opportunities"),
+                "format_message": "graph intelligence insights",
+            }
+
+        if self._is_graph_analysis_command(normalized):
+            payload = self.graph_intelligence.insights(limit=10)
+            return {
+                "agent_name": "graph_intelligence",
+                "final_answer": self.graph_intelligence.format_insights(payload),
+                "format_message": "graph intelligence insights",
             }
 
         return None
@@ -718,6 +759,47 @@ class Orchestrator:
             "aggiorna second brain",
             "aggiorna il cervello",
             "sincronizza second brain",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_graph_analysis_command(self, normalized: str) -> bool:
+        patterns = (
+            "analizza il mio brain",
+            "analizza il knowledge graph",
+            "analizza il grafo",
+            "analisi del brain",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_graph_gap_command(self, normalized: str) -> bool:
+        patterns = (
+            "cosa manca nel mio brain",
+            "cosa manca nel mio sistema",
+            "quali obiettivi sono poco collegati ai task",
+            "obiettivi poco collegati",
+            "quali topic dovrei sviluppare di più",
+            "quali topic dovrei sviluppare di piu",
+            "topic dovrei sviluppare",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_graph_important_nodes_command(self, normalized: str) -> bool:
+        patterns = (
+            "quali sono i nodi più importanti",
+            "quali sono i nodi piu importanti",
+            "concetti più importanti",
+            "concetti piu importanti",
+            "nodi importanti",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_graph_opportunity_command(self, normalized: str) -> bool:
+        patterns = (
+            "quali opportunità vedi",
+            "quali opportunita vedi",
+            "opportunità emergono dal grafo",
+            "opportunita emergono dal grafo",
+            "opportunita dal grafo",
         )
         return any(pattern in normalized for pattern in patterns)
 

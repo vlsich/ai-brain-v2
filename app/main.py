@@ -17,6 +17,7 @@ from app.database import SessionLocal, get_db, init_db
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
+from app.graph_intelligence import GraphIntelligence
 from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.models import DailyReview, WeeklyReview
@@ -419,6 +420,21 @@ def search_graph(q: str = "", limit: int = 25, db: Session = Depends(get_db)) ->
 def rebuild_graph(limit: int = 250, db: Session = Depends(get_db)) -> dict:
     graph = KnowledgeGraph(db)
     return graph.rebuild(limit=limit)
+
+
+@app.get("/graph/insights")
+def get_graph_insights(limit: int = 10, db: Session = Depends(get_db)) -> dict:
+    return GraphIntelligence(db).insights(limit=limit)
+
+
+@app.get("/graph/clusters")
+def get_graph_clusters(limit: int = 10, db: Session = Depends(get_db)) -> dict:
+    return GraphIntelligence(db).clusters(limit=limit)
+
+
+@app.get("/graph/gaps")
+def get_graph_gaps(limit: int = 10, db: Session = Depends(get_db)) -> dict:
+    return GraphIntelligence(db).gaps(limit=limit)
 
 
 @app.post("/brain/seed")
