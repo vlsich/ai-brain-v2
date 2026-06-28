@@ -168,6 +168,22 @@ Altri comandi supportati:
 
 Il briefing usa obiettivi attivi, task pendenti, decisioni recenti, memoria, calendario editoriale e Brain State Summary. Produce focus del giorno, top 3 priorita, idee contenuto, raccomandazioni business, rischi e prossime azioni.
 
+Esempio Goal-to-Content Pipeline:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"trasforma i miei obiettivi in contenuti"}'
+```
+
+Comandi equivalenti:
+
+- `creami contenuti in base agli obiettivi`
+- `genera task dai miei obiettivi`
+- `prepara piano operativo settimanale`
+
+La pipeline legge gli obiettivi attivi, genera idee contenuto collegate a ogni obiettivo, crea task pratici, assegna priorita in base all'importanza dell'obiettivo e salva idee/task nel calendario editoriale.
+
 Esempio stato conversazionale e follow-up:
 
 ```bash

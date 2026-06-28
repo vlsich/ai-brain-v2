@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -254,3 +254,171 @@ class ProactiveBrainLoop:
 
     def _bullets(self, items: list[str]) -> str:
         return "\n".join(f"- {item}" for item in items) or "- Nessun elemento disponibile."
+
+
+class GoalToContentPipeline:
+    def __init__(self, db: Session):
+        self.db = db
+        self.goal_engine = GoalEngine(db)
+        self.editorial_calendar = EditorialCalendar(db)
+
+    def generate_weekly_plan(self) -> dict[str, Any]:
+        goals = self.goal_engine.list_active_goals(limit=8)
+        payload = {"plans": [], "ideas": [], "tasks": []}
+        today = datetime.utcnow().date()
+
+        for index, goal in enumerate(goals):
+            priority = self._priority_from_goal(goal)
+            ideas = self._ideas_for_goal(goal, priority, today, index)
+            tasks = self._tasks_for_ideas(goal, ideas, priority, today, index)
+            payload["plans"].extend(ideas[:1])
+            payload["ideas"].extend(ideas)
+            payload["tasks"].extend(tasks)
+
+        if not goals:
+            fallback_goal = type(
+                "FallbackGoal",
+                (),
+                {
+                    "title": "Crescere personal brand finance",
+                    "description": "Costruire autorevolezza con contenuti educativi su finanza e investimenti.",
+                    "category": "personal_brand",
+                    "priority": "high",
+                    "related_topic": "finance personal brand",
+                },
+            )()
+            ideas = self._ideas_for_goal(fallback_goal, 4, today, 0)
+            payload["ideas"].extend(ideas)
+            payload["tasks"].extend(self._tasks_for_ideas(fallback_goal, ideas, 4, today, 0))
+
+        saved = self.editorial_calendar.save_planner_payload(payload)
+        return {
+            "goals": goals,
+            "payload": payload,
+            "saved": saved,
+        }
+
+    def format_for_telegram(self, result: dict[str, Any]) -> str:
+        goals = result.get("goals", [])
+        payload = result.get("payload", {})
+        ideas = payload.get("ideas", [])[:9]
+        tasks = payload.get("tasks", [])[:9]
+
+        goal_lines = []
+        for goal in goals[:5]:
+            goal_lines.append(f"- {goal.title}")
+        if not goal_lines:
+            goal_lines.append("- Crescere personal brand finance")
+
+        idea_lines = [f"{index}. {item['platform']}: {item['title']}" for index, item in enumerate(ideas, start=1)]
+        task_lines = [f"{index}. {item['title']}" for index, item in enumerate(tasks, start=1)]
+
+        return (
+            "Ho trasformato gli obiettivi attivi in un piano contenuti operativo.\n\n"
+            "Obiettivi:\n"
+            f"{chr(10).join(goal_lines)}\n\n"
+            "Contenuti suggeriti:\n"
+            f"{chr(10).join(idea_lines) if idea_lines else '1. Reel: 3 errori sugli ETF'}\n\n"
+            "Task:\n"
+            f"{chr(10).join(task_lines) if task_lines else '1. Scrivere script Reel ETF'}\n\n"
+            "Prossima azione:\n"
+            "Scegli il primo contenuto, scrivi lo script e collegalo a una CTA semplice."
+        )
+
+    def _ideas_for_goal(self, goal: Any, priority: int, today, offset: int) -> list[dict[str, Any]]:
+        topic = self._topic_for_goal(goal)
+        objective = f"Supportare l'obiettivo: {goal.title}"
+        audience = "Audience interessata a finanza personale, investimenti e crescita del personal brand"
+        due_base = today + timedelta(days=offset)
+
+        return [
+            {
+                "title": f"3 errori da evitare su {topic}",
+                "platform": "Reel/TikTok",
+                "content_type": "short video",
+                "objective": objective,
+                "target_audience": audience,
+                "hook": f"Se stai iniziando con {topic}, evita questi 3 errori.",
+                "status": "idea",
+                "priority": priority,
+                "due_date": due_base.isoformat(),
+            },
+            {
+                "title": f"Perche {topic} richiede metodo",
+                "platform": "LinkedIn",
+                "content_type": "post",
+                "objective": objective,
+                "target_audience": audience,
+                "hook": f"{topic} non e una scorciatoia: e uno strumento da usare con metodo.",
+                "status": "idea",
+                "priority": max(priority - 1, 1),
+                "due_date": (due_base + timedelta(days=1)).isoformat(),
+            },
+            {
+                "title": f"{topic} vs alternative: cosa cambia davvero",
+                "platform": "Instagram",
+                "content_type": "carousel",
+                "objective": objective,
+                "target_audience": audience,
+                "hook": f"Prima di scegliere {topic}, capisci cosa stai confrontando.",
+                "status": "idea",
+                "priority": max(priority - 1, 1),
+                "due_date": (due_base + timedelta(days=2)).isoformat(),
+            },
+        ]
+
+    def _tasks_for_ideas(self, goal: Any, ideas: list[dict[str, Any]], priority: int, today, offset: int) -> list[dict[str, Any]]:
+        tasks = []
+        for index, idea in enumerate(ideas):
+            platform = idea["platform"]
+            if "Reel" in platform or "TikTok" in platform:
+                title = f"Scrivere script {idea['title']}"
+            elif platform == "Instagram":
+                title = f"Preparare grafiche carosello {idea['title']}"
+            else:
+                title = f"Pubblicare post LinkedIn {idea['title']}"
+            tasks.append(
+                {
+                    "title": title[:255],
+                    "platform": platform,
+                    "content_type": "execution task",
+                    "objective": f"Eseguire contenuto collegato a: {goal.title}",
+                    "target_audience": idea["target_audience"],
+                    "hook": idea["hook"],
+                    "status": "todo",
+                    "priority": max(priority - index, 1),
+                    "due_date": (today + timedelta(days=offset + index)).isoformat(),
+                }
+            )
+        return tasks
+
+    def _priority_from_goal(self, goal: Any) -> int:
+        return {
+            "critical": 5,
+            "high": 4,
+            "medium": 3,
+            "low": 2,
+        }.get(str(getattr(goal, "priority", "medium")).lower(), 3)
+
+    def _topic_for_goal(self, goal: Any) -> str:
+        text = " ".join(
+            str(part)
+            for part in (
+                getattr(goal, "title", ""),
+                getattr(goal, "description", ""),
+                getattr(goal, "related_topic", ""),
+                getattr(goal, "category", ""),
+            )
+            if part
+        ).lower()
+        if "etf" in text:
+            return "ETF"
+        if "invest" in text or "finance" in text or "finanza" in text:
+            return "investimenti"
+        if "lead" in text or "customer" in text or "monet" in text:
+            return "conversione audience"
+        if "brand" in text:
+            return "personal brand finance"
+        if "content" in text or "contenut" in text:
+            return "sistema contenuti finance"
+        return "educazione finanziaria"

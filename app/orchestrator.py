@@ -22,7 +22,7 @@ from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
 from app.memory import Memory
-from app.proactive_loop import ProactiveBrainLoop
+from app.proactive_loop import GoalToContentPipeline, ProactiveBrainLoop
 from app.role_router import RoleRouter
 from app.task_engine import TaskEngine
 
@@ -49,6 +49,7 @@ class Orchestrator:
         self.goal_engine = GoalEngine(db)
         self.goal_engine.ensure_default_goals()
         self.proactive_loop = ProactiveBrainLoop(db)
+        self.goal_content_pipeline = GoalToContentPipeline(db)
         self.daily_review_agent = DailyReviewAgent(self.settings)
         self.weekly_review_agent = WeeklyReviewAgent(self.settings)
 
@@ -349,6 +350,14 @@ class Orchestrator:
         if goal_result:
             return goal_result
 
+        if self._is_goal_to_content_command(normalized):
+            result = self.goal_content_pipeline.generate_weekly_plan()
+            return {
+                "agent_name": "goal_content_pipeline",
+                "final_answer": self.goal_content_pipeline.format_for_telegram(result),
+                "format_message": "goal to content weekly execution plan",
+            }
+
         if self._is_proactive_briefing_command(normalized):
             briefing = self.proactive_loop.generate_daily_briefing()
             return {
@@ -567,6 +576,15 @@ class Orchestrator:
             "preparami la giornata",
             "dammi il focus di oggi",
             "focus di oggi",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_goal_to_content_command(self, normalized: str) -> bool:
+        patterns = (
+            "trasforma i miei obiettivi in contenuti",
+            "creami contenuti in base agli obiettivi",
+            "genera task dai miei obiettivi",
+            "prepara piano operativo settimanale",
         )
         return any(pattern in normalized for pattern in patterns)
 

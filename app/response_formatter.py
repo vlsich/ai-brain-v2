@@ -134,7 +134,7 @@ class ResponseFormatter:
             if structured:
                 return self._truncate(structured, max_chars, markdown=markdown)
 
-        if "proactive daily business briefing" in user_message.lower():
+        if self._preserve_plain_output(user_message):
             formatted = self._render_plain_text(str(raw_reply), markdown=markdown)
             return self._truncate(formatted, max_chars, markdown=markdown)
 
@@ -540,6 +540,16 @@ class ResponseFormatter:
     def _render_plain_text(self, text: str, markdown: bool) -> str:
         text = re.sub(r"\n{3,}", "\n\n", text.strip())
         return self._escape_html(text) if markdown else text
+
+    def _preserve_plain_output(self, user_message: str) -> bool:
+        lowered = user_message.lower()
+        return any(
+            marker in lowered
+            for marker in (
+                "proactive daily business briefing",
+                "goal to content weekly execution plan",
+            )
+        )
 
     def _format_structured(self, user_message: str, payload: Any, markdown: bool) -> str:
         if isinstance(payload, list):
