@@ -16,6 +16,7 @@ from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
+from app.scheduler import AutonomousScheduler
 from app.semantic_memory import SemanticMemory
 
 
@@ -70,6 +71,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     logger.info("Telegram message received chat_id=%s text=%r", update.effective_chat.id if update.effective_chat else None, message)
+
+    if is_chat_id_request(message):
+        chat_id = update.effective_chat.id if update.effective_chat else "non disponibile"
+        await reply_text(update, format_static_reply(message, f"Il tuo chat id Telegram e:\n{chat_id}"))
+        return
+
     await update.message.chat.send_action(action=ChatAction.TYPING)
 
     try:
@@ -173,6 +180,18 @@ def strip_html(text: str) -> str:
     return re.sub(r"</?[^>]+>", "", text)
 
 
+def is_chat_id_request(message: str) -> bool:
+    normalized = message.lower().strip(" ?")
+    return normalized in {
+        "qual è il mio chat id",
+        "qual e il mio chat id",
+        "qual è il mio chat id?",
+        "qual e il mio chat id?",
+        "chat id",
+        "mio chat id",
+    }
+
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     if context.error:
         logger.error(
@@ -188,12 +207,30 @@ def build_application() -> Application:
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is missing. Set it in .env before starting the bot.")
 
-    application = Application.builder().token(settings.telegram_bot_token).build()
+    application = (
+        Application.builder()
+        .token(settings.telegram_bot_token)
+        .post_init(start_autonomous_scheduler)
+        .post_shutdown(stop_autonomous_scheduler)
+        .build()
+    )
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     application.add_error_handler(error_handler)
     return application
+
+
+async def start_autonomous_scheduler(application: Application) -> None:
+    scheduler = AutonomousScheduler(application, get_settings())
+    application.bot_data["autonomous_scheduler"] = scheduler
+    scheduler.start()
+
+
+async def stop_autonomous_scheduler(application: Application) -> None:
+    scheduler = application.bot_data.get("autonomous_scheduler")
+    if scheduler:
+        await scheduler.stop()
 
 
 def main() -> None:
