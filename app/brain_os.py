@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.brain.reasoning_engine import ReasoningEngine
 from app.context_builder import CognitiveContextBuilder
 from app.goal_engine import GoalEngine
 from app.memory import Memory
@@ -26,6 +27,7 @@ class BrainOS:
         self.memory = Memory(db)
         self.goal_engine = GoalEngine(db)
         self.context_builder = CognitiveContextBuilder(db, chat_id=chat_id)
+        self.reasoning_engine = ReasoningEngine(db, chat_id=chat_id, context_builder=self.context_builder)
         self.tool_router = ToolRouter(db)
         self.response_synthesizer = ResponseSynthesizer(telegram_mode=telegram_mode)
         self.orchestrator = Orchestrator(db, chat_id=chat_id)
@@ -44,7 +46,10 @@ class BrainOS:
                 effective_prompt=message,
             )
 
-        context = self.context_builder.build(message)
+        reasoning_plan = self.reasoning_engine.reason(message)
+        context = reasoning_plan.context
+        if context is None:
+            raise RuntimeError("ReasoningEngine did not return cognitive context")
         tool_result = self.tool_router.route(context.effective_prompt, chat_id=self.chat_id)
 
         if tool_result.handled:
@@ -54,12 +59,19 @@ class BrainOS:
                 tool_result=tool_result,
                 memories_used=context.memories_used,
                 mode=mode,
-                active_intent=context.role_spec.intent,
-                output_type=context.role_spec.output_type,
+                active_intent=reasoning_plan.detected_intent,
+                output_type=reasoning_plan.response_mode,
                 effective_prompt=context.effective_prompt,
             )
 
-        logger.info("BrainOS delegating to orchestrator intent=%s role=%s", context.role_spec.intent, context.role_spec.role)
+        logger.info(
+            "BrainOS delegating to orchestrator intent=%s role=%s mode=%s objective=%s sources=%s",
+            reasoning_plan.detected_intent,
+            reasoning_plan.selected_role,
+            reasoning_plan.response_mode,
+            reasoning_plan.real_objective,
+            ",".join(reasoning_plan.context_sources_used) or "none",
+        )
         if mode == "task":
             result = self.orchestrator.handle_task(message)
             raw_final = result["final_answer"]
