@@ -384,6 +384,36 @@ def get_related_concepts(query: str = "", limit: int = 12, db: Session = Depends
     return {"concepts": graph.related_concepts(query=query, limit=limit)}
 
 
+@app.get("/graph/nodes")
+def get_graph_nodes(
+    type: Optional[str] = None,
+    limit: int = 500,
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    return KnowledgeGraph(db).export_nodes(limit=limit, node_type=type)
+
+
+@app.get("/graph/edges")
+def get_graph_edges(limit: int = 1000, db: Session = Depends(get_db)) -> list[dict]:
+    return KnowledgeGraph(db).export_edges(limit=limit)
+
+
+@app.get("/graph")
+def get_graph(limit: int = 500, db: Session = Depends(get_db)) -> dict:
+    return KnowledgeGraph(db).export_graph(limit=limit)
+
+
+@app.get("/graph/search")
+def search_graph(q: str = "", limit: int = 25, db: Session = Depends(get_db)) -> dict:
+    return KnowledgeGraph(db).search_graph(query=q, limit=limit)
+
+
+@app.post("/graph/rebuild")
+def rebuild_graph(limit: int = 250, db: Session = Depends(get_db)) -> dict:
+    graph = KnowledgeGraph(db)
+    return graph.rebuild(limit=limit)
+
+
 @app.post("/brain/seed")
 def seed_brain(payload: BrainSeedRequest, db: Session = Depends(get_db)) -> dict:
     memories = [memory.model_dump() for memory in payload.memories] if payload.memories else None

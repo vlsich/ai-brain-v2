@@ -552,6 +552,8 @@ class ResponseFormatter:
                 "second brain update",
                 "second brain related concepts",
                 "brain state summary",
+                "knowledge graph summary",
+                "knowledge graph rebuild",
             )
         )
 

@@ -525,6 +525,22 @@ class Orchestrator:
         return None
 
     def _handle_second_brain_command(self, prompt: str, normalized: str) -> dict[str, str] | None:
+        if self._is_rebuild_knowledge_graph_command(normalized):
+            result = self.knowledge_graph.rebuild(limit=250)
+            return {
+                "agent_name": "knowledge_graph",
+                "final_answer": self.knowledge_graph.format_rebuild_result(result),
+                "format_message": "knowledge graph rebuild",
+            }
+
+        if self._is_graph_nodes_command(normalized):
+            self.knowledge_graph.refresh_from_current_state(limit=100)
+            return {
+                "agent_name": "knowledge_graph",
+                "final_answer": self.knowledge_graph.format_graph_summary(limit=12),
+                "format_message": "knowledge graph summary",
+            }
+
         if self._is_update_second_brain_command(normalized):
             semantic_count = self.semantic_memory.sync_from_long_term_memory()
             graph_counts = self.knowledge_graph.refresh_from_current_state()
@@ -546,11 +562,13 @@ class Orchestrator:
 
         if self._is_related_concepts_command(normalized):
             self.knowledge_graph.refresh_from_current_state(limit=60)
-            query = self._strip_second_brain_command(prompt)
+            query = self._strip_second_brain_command(prompt) or ("business" if "business" in normalized else "")
             concepts = self.knowledge_graph.related_concepts(query=query, limit=12)
             return {
                 "agent_name": "knowledge_graph",
-                "final_answer": self.knowledge_graph.format_related_concepts(concepts),
+                "final_answer": self.knowledge_graph.format_graph_summary(query=query, limit=12)
+                if query
+                else self.knowledge_graph.format_related_concepts(concepts),
                 "format_message": "second brain related concepts",
             }
 
@@ -703,12 +721,34 @@ class Orchestrator:
         )
         return any(pattern in normalized for pattern in patterns)
 
+    def _is_rebuild_knowledge_graph_command(self, normalized: str) -> bool:
+        patterns = (
+            "ricostruisci il knowledge graph",
+            "ricostruisci knowledge graph",
+            "rebuild knowledge graph",
+            "ricostruisci il grafo",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_graph_nodes_command(self, normalized: str) -> bool:
+        patterns = (
+            "quali nodi ci sono nel mio brain",
+            "mostrami i nodi del brain",
+            "mostrami il knowledge graph",
+            "mostrami il grafo",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
     def _is_related_concepts_command(self, normalized: str) -> bool:
         patterns = (
             "quali concetti sono collegati",
+            "mostrami i concetti collegati",
             "concetti collegati",
             "relazioni del brain",
             "knowledge graph",
+            "cosa è collegato al mio business",
+            "cosa e collegato al mio business",
+            "collegato al mio business",
         )
         return any(pattern in normalized for pattern in patterns)
 
@@ -716,9 +756,13 @@ class Orchestrator:
         cleaned = prompt
         for pattern in (
             "quali concetti sono collegati",
+            "mostrami i concetti collegati",
             "concetti collegati",
             "relazioni del brain",
             "knowledge graph",
+            "cosa è collegato al mio business",
+            "cosa e collegato al mio business",
+            "collegato al mio business",
         ):
             cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
         return cleaned.strip(" :?")[:120]

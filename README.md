@@ -558,12 +558,59 @@ Leggere concetti collegati:
 curl "http://127.0.0.1:8000/brain/concepts?query=TikTok&limit=10"
 ```
 
+## Knowledge Graph API
+
+AI Brain espone il Second Brain come grafo pronto per una futura dashboard visuale.
+
+Endpoint disponibili:
+
+- `GET /graph/nodes`
+- `GET /graph/edges`
+- `GET /graph`
+- `GET /graph/search?q=...`
+- `POST /graph/rebuild`
+
+Export completo:
+
+```bash
+curl http://127.0.0.1:8000/graph
+```
+
+Risposta:
+
+```json
+{
+  "nodes": [],
+  "edges": []
+}
+```
+
+Ricerca nel grafo:
+
+```bash
+curl "http://127.0.0.1:8000/graph/search?q=business"
+```
+
+Ricostruire il grafo:
+
+```bash
+curl -X POST http://127.0.0.1:8000/graph/rebuild
+```
+
+Tipi nodo supportati: `person`, `business`, `goal`, `platform`, `content_pillar`, `project`, `task`, `decision`, `topic`, `agent`, `strategy`.
+
+Tipi relazione supportati: `related_to`, `supports`, `depends_on`, `created_by`, `improves`, `belongs_to`, `conflicts_with`, `inspired_by`.
+
 Comandi Telegram/Chat per il Second Brain:
 
 - `cosa sai di me?`
 - `mostrami il mio brain state`
 - `aggiorna il mio second brain`
 - `quali concetti sono collegati?`
+- `mostrami i concetti collegati`
+- `cosa e collegato al mio business?`
+- `quali nodi ci sono nel mio brain?`
+- `ricostruisci il knowledge graph`
 - `cosa sto costruendo?`
 
 ## Memory Retrieval
