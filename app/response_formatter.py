@@ -556,6 +556,7 @@ class ResponseFormatter:
                 "knowledge graph summary",
                 "knowledge graph rebuild",
                 "graph intelligence insights",
+                "obsidian export summary",
                 "scheduled daily briefing",
                 "scheduled weekly review",
                 "scheduled brain state refresh",

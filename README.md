@@ -55,6 +55,38 @@ Execution flow:
 5. `ResponseSynthesizer` adatta la risposta al canale e all'intent.
 6. Lo stato conversazionale viene aggiornato e la memoria resta compatibile con i sistemi esistenti.
 
+## Obsidian Sync
+
+AI Brain può esportare il suo Second Brain in un Obsidian Vault senza usare Telegram, OpenAI o LLM.
+
+Configura il percorso:
+
+```env
+OBSIDIAN_VAULT_PATH=/Users/michelevalsecchii/Documents/AI Brain Vault
+```
+
+Esegui l'export da Python:
+
+```python
+from app.brain.graph_exporter import GraphExporter
+
+GraphExporter.export_all()
+```
+
+Puoi anche attivare il sync manualmente:
+
+```bash
+curl -X POST http://127.0.0.1:8000/obsidian/export
+```
+
+Da Telegram/chat:
+
+- `sincronizza obsidian`
+- `aggiorna obsidian`
+- `esporta brain su obsidian`
+
+Il sync crea le cartelle `01 Goals`, `02 Projects`, `03 Areas`, `04 Knowledge`, `05 People`, `06 Content`, `07 Decisions`, `08 Tasks`, `09 Daily` e aggiorna solo la sezione generata da AI Brain dentro ogni nota, preservando gli appunti manuali.
+
 ## Setup
 
 ```bash

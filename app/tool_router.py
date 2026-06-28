@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.agents.autonomous_daily_worker import AutonomousDailyWorker
+from app.brain.graph_exporter import GraphExporter
 from app.brain_core import BrainCore
 from app.decision_journal import DecisionJournal
 from app.goal_engine import GoalEngine
@@ -73,6 +74,21 @@ class ToolRouter:
                 response=self.autonomous_daily_worker.run(),
                 tool_name="autonomous_daily_worker",
                 format_message="autonomous daily worker briefing",
+            )
+
+        if self._matches(normalized, ("sincronizza obsidian", "aggiorna obsidian", "esporta brain su obsidian")):
+            try:
+                result = GraphExporter.export_all(db=self.db)
+                response = self._format_obsidian_export(result)
+            except ValueError as exc:
+                response = str(exc)
+            except Exception as exc:
+                response = f"Export Obsidian non completato.\n\nErrore: {exc}"
+            return ToolResult(
+                handled=True,
+                response=response,
+                tool_name="obsidian_exporter",
+                format_message="obsidian export summary",
             )
 
         if self._matches(normalized, ("piano operativo settimanale", "trasforma i miei obiettivi in contenuti", "genera task dai miei obiettivi")):
@@ -143,6 +159,23 @@ class ToolRouter:
         if not selected:
             selected = lines[:6]
         return "Questo e cio che so oggi del tuo Brain:\n\n" + "\n\n".join(selected[:8])
+
+    def _format_obsidian_export(self, result: dict[str, Any]) -> str:
+        errors = result.get("errors") or []
+        lines = [
+            "Sync Obsidian completato.",
+            "",
+            f"File creati: {result.get('files_created', 0)}",
+            f"File aggiornati: {result.get('files_updated', 0)}",
+            f"Entità esportate: {result.get('entities_exported', 0)}",
+            f"Vault: {result.get('vault_path', '')}",
+        ]
+        if errors:
+            lines.extend(["", "Errori:"])
+            lines.extend(f"- {error}" for error in errors[:5])
+        else:
+            lines.extend(["", "Errori: nessuno."])
+        return "\n".join(lines)
 
     def _is_chat_id_request(self, normalized: str) -> bool:
         return normalized in {

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     scheduler_daily_briefing_hour: int = 8
     scheduler_weekly_review_hour: int = 18
     scheduler_tick_seconds: int = 60
+    obsidian_vault_path: Optional[str] = None
     port: int = 8000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

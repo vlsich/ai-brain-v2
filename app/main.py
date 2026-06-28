@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.brain.graph_exporter import GraphExporter
 from app.brain_core import BrainCore
 from app.brain_os import BrainOS
 from app.config import get_settings
@@ -67,6 +68,17 @@ class ChatResponse(BaseModel):
     agents_used: list[str]
     memories_used: list[RetrievedMemoryResponse] = Field(default_factory=list)
     task_id: int
+
+
+class ObsidianExportResponse(BaseModel):
+    vault_path: str
+    files_created: int
+    files_updated: int
+    files_written: int
+    folders_created: int
+    entities_exported: int
+    updated_at: str
+    errors: list[str] = Field(default_factory=list)
 
 
 class LongTermMemoryResponse(BaseModel):
@@ -439,6 +451,17 @@ def get_graph_gaps(limit: int = 10, db: Session = Depends(get_db)) -> dict:
 def seed_brain(payload: BrainSeedRequest, db: Session = Depends(get_db)) -> dict:
     memories = [memory.model_dump() for memory in payload.memories] if payload.memories else None
     return BrainCore(db).seed(memories=memories)
+
+
+@app.post("/obsidian/export", response_model=ObsidianExportResponse)
+def export_obsidian(db: Session = Depends(get_db)) -> dict:
+    try:
+        return GraphExporter.export_all(db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Obsidian export failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/editorial/plan", response_model=EditorialPlanResponse)
