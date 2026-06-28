@@ -87,6 +87,23 @@ Da Telegram/chat:
 
 Il sync crea le cartelle `01 Goals`, `02 Projects`, `03 Areas`, `04 Knowledge`, `05 People`, `06 Content`, `07 Decisions`, `08 Tasks`, `09 Daily` e aggiorna solo la sezione generata da AI Brain dentro ogni nota, preservando gli appunti manuali.
 
+### Local Obsidian Sync CLI
+
+Su Railway il backend non può scrivere direttamente nel Vault locale del Mac. Per sincronizzare il Vault locale, configura:
+
+```env
+AI_BRAIN_API_BASE_URL=https://YOUR-RAILWAY-URL
+OBSIDIAN_VAULT_PATH=/Users/michelevalsecchii/Documents/AI Brain Vault
+```
+
+Poi esegui dal Mac:
+
+```bash
+python scripts/sync_obsidian.py
+```
+
+Lo script scarica dati da `/graph`, `/goals`, `/tasks` se disponibile, `/productivity/tasks/pending`, `/decisions` e `/brain/state`. Se un endpoint non esiste, viene saltato e il sync continua. Le note manuali non vengono sovrascritte: viene aggiornata solo la sezione tra `<!-- AI_BRAIN_START -->` e `<!-- AI_BRAIN_END -->`.
+
 ## Setup
 
 ```bash
