@@ -53,6 +53,8 @@ class MemoryCuratorAgent:
                         "content": (
                             "Sei un Memory Curator Agent. Decidi cosa merita di essere "
                             "salvato nella memoria a lungo termine di un sistema multi-agente. "
+                            "Dopo conversazioni importanti devi estrarre key facts, decisioni, "
+                            "preferenze, obiettivi, lezioni, progetti e istruzioni operative. "
                             "Rispondi solo con JSON valido nel formato: "
                             "{\"memories\":[{\"memory_type\":\"...\",\"title\":\"...\","
                             "\"content\":\"...\",\"importance\":1}]}. "
@@ -61,7 +63,9 @@ class MemoryCuratorAgent:
                             "tasks, agent_instructions. Salva solo informazioni utili, "
                             "riusabili e non ovvie. Non salvare rumore, passaggi generici, risposte "
                             "temporanee, ripetizioni, semplici output generati o dettagli privi di valore futuro. "
-                            "Se una memoria simile sembra gia esistere, salva solo un aggiornamento realmente nuovo. "
+                            "Se un tema ricorre, aumenta importanza solo quando rafforza identita, obiettivi, "
+                            "decisioni o preferenze stabili. Se una memoria simile sembra gia esistere, salva "
+                            "solo un aggiornamento realmente nuovo. "
                             f"{GLOBAL_AGENT_RULES}"
                         ),
                     },
@@ -149,6 +153,36 @@ class MemoryCuratorAgent:
                 }
             )
 
+        if any(keyword in normalized for keyword in ("ho deciso", "decido", "decisione", "salva questa decisione")):
+            memories.append(
+                {
+                    "memory_type": "decisions",
+                    "title": "Decisione strategica di Michele",
+                    "content": f"Michele ha espresso o richiesto supporto su una decisione strategica: {user_request}",
+                    "importance": 5,
+                }
+            )
+
+        if any(keyword in normalized for keyword in ("obiettivo", "goal", "voglio", "priorita", "priorità")):
+            memories.append(
+                {
+                    "memory_type": "goals",
+                    "title": "Obiettivo o priorita dichiarata",
+                    "content": f"Michele ha indicato un obiettivo o una priorita operativa: {user_request}",
+                    "importance": 4,
+                }
+            )
+
+        if any(keyword in normalized for keyword in ("preferisco", "voglio risposte", "non voglio", "stile", "tono")):
+            memories.append(
+                {
+                    "memory_type": "preferences",
+                    "title": "Preferenza operativa di Michele",
+                    "content": f"Preferenza o vincolo espresso da Michele: {user_request}",
+                    "importance": 4,
+                }
+            )
+
         if any(keyword in normalized for keyword in ("brand", "posizionamento", "finance", "finanza", "multi-platform")):
             memories.append(
                 {
@@ -169,6 +203,16 @@ class MemoryCuratorAgent:
                     "title": "Obiettivo strategico business finance",
                     "content": f"Michele vuole definire una direzione operativa per crescita, contenuti o conversione: {user_request}",
                     "importance": 4,
+                }
+            )
+
+        if any(keyword in normalized for keyword in ("impara", "lezione", "errore", "evita", "funziona", "non funziona")):
+            memories.append(
+                {
+                    "memory_type": "lessons",
+                    "title": "Lezione operativa",
+                    "content": f"Possibile lezione riutilizzabile per AI Brain o il business: {user_request}",
+                    "importance": 3,
                 }
             )
 

@@ -101,11 +101,11 @@ class Memory:
             .first()
         )
         if existing:
+            existing.importance = max(existing.importance, max(1, min(5, importance)))
             if content and content not in existing.content:
                 existing.content = f"{existing.content}\nAggiornamento: {content}"
-                existing.importance = max(existing.importance, max(1, min(5, importance)))
-                self.db.commit()
-                self.db.refresh(existing)
+            self.db.commit()
+            self.db.refresh(existing)
             return existing
 
         memory = LongTermMemory(

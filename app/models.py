@@ -69,6 +69,42 @@ class BrainState(Base):
     )
 
 
+class SemanticMemory(Base):
+    __tablename__ = "semantic_memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    importance: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    embedding: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(255), default="", nullable=False, index=True)
+    related_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class KnowledgeNode(Base):
+    __tablename__ = "knowledge_nodes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    importance: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class KnowledgeEdge(Base):
+    __tablename__ = "knowledge_edges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_nodes.id"), nullable=False, index=True)
+    target_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_nodes.id"), nullable=False, index=True)
+    relationship_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    strength: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class ConversationState(Base):
     __tablename__ = "conversation_state"
 

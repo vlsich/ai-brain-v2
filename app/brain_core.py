@@ -7,7 +7,7 @@ from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from app.memory import Memory
-from app.models import BrainState, Goal, LongTermMemory
+from app.models import BrainState, Decision, Goal, LongTermMemory, ProductivityTask
 
 
 BRAIN_MEMORY_TYPES = {
@@ -214,10 +214,13 @@ class BrainCore:
             self._section("Business profile", grouped["business_profile"], fallback="Business centrato su finance, educazione finanziaria, investimenti e personal brand."),
             self._section("Obiettivi e priorita", grouped["goals"], fallback="Crescita del business, contenuti migliori, memoria decisionale e automazioni operative."),
             self._goals_section(),
+            self._current_priorities_section(),
+            self._current_projects_section(),
             self._section("Brand positioning", grouped["brand_positioning"], fallback="Personal brand finance pratico, autorevole, multi-platform e orientato alla conversione."),
             self._section("Preferenze", grouped["preferences"], fallback="Risposte in italiano, concrete, sintetiche, professionali e adatte a Telegram."),
             self._section("Content strategy", grouped["content_strategy"], fallback="Contenuti finance educativi, format social, funnel e conversione audience."),
-            self._section("Decisioni", grouped["decisions"], fallback="Nessuna decisione critica consolidata oltre alla costruzione modulare di AI Brain."),
+            self._content_pillars_section(grouped["content_strategy"]),
+            self._strategic_decisions_section(grouped["decisions"]),
             self._section("Lessons", grouped["lessons"], fallback="Salvare solo memoria utile, ridurre rumore e migliorare qualita delle risposte."),
             self._section("Tasks", grouped["tasks"], fallback="Sviluppare backend, Telegram bot, memoria persistente, retrieval e agenti specialistici."),
             self._section("Agent instructions", grouped["agent_instructions"], fallback="Manager sintetizza, Finance Strategist cura strategia finance, Content produce output utilizzabili."),
@@ -250,6 +253,71 @@ class BrainCore:
             target = f" target={goal.target_value}" if goal.target_value else ""
             parts.append(f"{goal.title} [{goal.category}/{goal.timeframe}/{goal.priority}]{target}{progress}")
         return "Active strategic goals: " + " | ".join(parts)
+
+    def _current_priorities_section(self) -> str:
+        tasks = (
+            self.db.query(ProductivityTask)
+            .filter(ProductivityTask.status.in_(("pending", "in_progress")))
+            .order_by(
+                case(
+                    (ProductivityTask.priority == "critical", 0),
+                    (ProductivityTask.priority == "high", 1),
+                    (ProductivityTask.priority == "medium", 2),
+                    (ProductivityTask.priority == "low", 3),
+                    else_=4,
+                ),
+                ProductivityTask.due_date.asc(),
+                ProductivityTask.created_at.desc(),
+            )
+            .limit(6)
+            .all()
+        )
+        if not tasks:
+            return "Current priorities: mantenere focus su contenuti finance, crescita audience, conversione e sviluppo AI Brain."
+        return "Current priorities: " + " | ".join(
+            f"{task.title} [{task.priority}] goal={task.related_goal or 'da collegare'}"
+            for task in tasks
+        )
+
+    def _current_projects_section(self) -> str:
+        projects = (
+            self.db.query(ProductivityTask.related_project)
+            .filter(ProductivityTask.related_project.isnot(None))
+            .distinct()
+            .limit(8)
+            .all()
+        )
+        project_names = [project.related_project for project in projects if project.related_project]
+        if not project_names:
+            project_names = ["AI Brain", "personal brand finance", "content engine", "business operating system"]
+        return "Current projects: " + " | ".join(project_names[:8])
+
+    def _content_pillars_section(self, memories: list[LongTermMemory]) -> str:
+        default_pillars = [
+            "educazione finanziaria",
+            "investimenti",
+            "ETF",
+            "personal brand finance",
+            "conversione audience",
+            "multi-platform content",
+        ]
+        text = " ".join(memory.content for memory in memories).lower()
+        pillars = [pillar for pillar in default_pillars if pillar.lower() in text] or default_pillars
+        return "Content pillars: " + " | ".join(pillars[:8])
+
+    def _strategic_decisions_section(self, memories: list[LongTermMemory]) -> str:
+        decisions = (
+            self.db.query(Decision)
+            .order_by(Decision.created_at.desc())
+            .limit(6)
+            .all()
+        )
+        if decisions:
+            return "Strategic decisions: " + " | ".join(
+                f"{decision.title}: {decision.decision[:160]}"
+                for decision in decisions
+            )
+        return self._section("Strategic decisions", memories, fallback="Nessuna decisione critica consolidata oltre alla costruzione modulare di AI Brain.")
 
     def _section(self, title: str, memories: list[LongTermMemory], fallback: str) -> str:
         if not memories:

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./ai_brain.db"
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o-mini"
+    openai_embedding_model: str = "text-embedding-3-small"
     openai_timeout_seconds: float = 20.0
     telegram_bot_token: Optional[str] = None
     telegram_max_response_chars: int = 2500
