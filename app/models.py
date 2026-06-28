@@ -69,6 +69,31 @@ class BrainState(Base):
     )
 
 
+class ConversationState(Base):
+    __tablename__ = "conversation_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    chat_id: Mapped[str] = mapped_column(String(128), default="default", nullable=False, index=True)
+    active_topic: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    active_task: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    active_agent: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    active_intent: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    active_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_assistant_response: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    last_generated_content: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    last_output_type: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    last_user_message: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    last_task_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
 class Goal(Base):
     __tablename__ = "goals"
 

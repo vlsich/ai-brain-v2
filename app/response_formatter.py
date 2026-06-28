@@ -100,7 +100,7 @@ class ResponseFormatter:
     def format_content_plan(self, plan: Any, markdown: bool = True) -> str:
         payload = plan if isinstance(plan, dict) else {}
         content = self._flatten_structured(payload) if payload else self._clean_text(str(plan))
-        return self._render_content_creation(content, markdown=markdown)
+        return self._render_content_creation(content, user_message="content plan", markdown=markdown)
 
     def format_recommendations(self, recommendations: Any, markdown: bool = True) -> str:
         points = self._coerce_points(recommendations)
@@ -146,7 +146,7 @@ class ResponseFormatter:
         mode = self._mode_for_intent(intent)
 
         if mode == "content_creation":
-            formatted = self._render_content_creation(cleaned, markdown=markdown)
+            formatted = self._render_content_creation(cleaned, user_message=user_message, markdown=markdown)
         elif mode == "strategy":
             formatted = self._render_strategy(user_message, cleaned, markdown=markdown)
         elif mode == "dashboard":
@@ -257,11 +257,12 @@ class ResponseFormatter:
             ]
         )
 
-    def _render_content_creation(self, cleaned: str, markdown: bool) -> str:
+    def _render_content_creation(self, cleaned: str, user_message: str, markdown: bool) -> str:
         content = self._strip_explanatory_preface(cleaned)
         blocks = self._content_blocks(content)
         if not blocks:
             blocks = [("# Hook", "Apri con un problema specifico e riconoscibile."), ("CTA", "Invita a salvare o rispondere con il dubbio principale.")]
+        blocks = self._ensure_complete_content_blocks(blocks, user_message)
 
         rendered = []
         for title, body in blocks:
@@ -271,6 +272,62 @@ class ResponseFormatter:
             else:
                 rendered.append(f"{title}\n{body}")
         return self._join_sections(rendered)
+
+    def _ensure_complete_content_blocks(self, blocks: list[tuple[str, str]], user_message: str) -> list[tuple[str, str]]:
+        normalized_request = user_message.lower()
+        normalized_titles = {self._normalize(title) for title, _ in blocks}
+        asks_only_hooks = any(term in normalized_request for term in ("solo hook", "soltanto hook", "only hooks", "solo gli hook"))
+        if asks_only_hooks:
+            return blocks
+
+        completed = list(blocks)
+        has_hook = any("hook" in title for title in normalized_titles)
+        has_cta = any("cta" in title or "call to action" in title for title in normalized_titles)
+        has_body = any(title in normalized_titles for title in ("body", "corpo", "script", "post"))
+        has_visual = any("visual" in title or "direzione" in title for title in normalized_titles)
+        has_slide = any("slide" in title for title in normalized_titles)
+
+        if any(term in normalized_request for term in ("carousel", "carosello")):
+            if not has_slide:
+                completed.extend(
+                    [
+                        ("Title", "Un errore finanziario che ti costa piu di quanto pensi"),
+                        ("Slide 1", "Il problema: molte persone investono senza una regola chiara."),
+                        ("Slide 2", "La conseguenza: ogni decisione dipende dall'emozione del momento."),
+                        ("Slide 3", "La soluzione: definisci obiettivo, orizzonte temporale e rischio massimo prima di investire."),
+                    ]
+                )
+            if not has_cta:
+                completed.append(("CTA", "Salva il carosello e rivedi la tua prossima scelta finanziaria con questo schema."))
+            return completed
+
+        if any(term in normalized_request for term in ("tiktok", "video", "reel", "short", "script")):
+            if not has_hook:
+                completed.insert(0, ("Hook", "Il problema non e quanto guadagni, ma quanto controllo hai sulle tue decisioni finanziarie."))
+            if not has_body:
+                completed.append(("Script", "Parti da un errore comune, spiega perche costa caro e chiudi con una regola pratica in 3 passaggi."))
+            if not has_visual:
+                completed.append(("Visual direction", "Parla in camera, usa testo grande per i 3 passaggi e mostra una checklist semplice a schermo."))
+            if not has_cta:
+                completed.append(("CTA", "Salva il video e scegli una decisione finanziaria da sistemare oggi."))
+            return completed
+
+        if any(term in normalized_request for term in ("linkedin", "post")):
+            if not has_hook:
+                completed.insert(0, ("Hook", "La maggior parte delle persone non ha un problema di soldi: ha un problema di metodo."))
+            if not has_body:
+                completed.append(("Body", "Sviluppa il post con un problema concreto, 3 punti pratici e una chiusura che collega finanza personale, metodo e responsabilita."))
+            if not has_cta:
+                completed.append(("CTA", "Qual e la decisione finanziaria che stai rimandando? Scrivimela nei commenti."))
+            if "hashtag" not in normalized_titles:
+                completed.append(("Hashtags", "#finanzapersonale #investimenti #educazionefinanziaria"))
+            return completed
+
+        if not has_body and len(completed) == 1:
+            completed.append(("Body", "Sviluppa l'idea con contesto, valore pratico e un esempio concreto."))
+        if not has_cta:
+            completed.append(("CTA", "Salva questo contenuto e applica il primo passaggio oggi."))
+        return completed
 
     def _render_dashboard_from_text(self, cleaned: str, markdown: bool) -> str:
         points = self._dedupe_points(self._extract_readable_lines(cleaned, limit=14))

@@ -17,10 +17,12 @@ from app.agents.research import ResearchAgent
 from app.agents.weekly_review_agent import WeeklyReviewAgent
 from app.brain_core import BrainCore
 from app.config import get_settings
+from app.conversation_state import ConversationStateManager
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
 from app.memory import Memory
+from app.role_router import RoleRouter
 from app.task_engine import TaskEngine
 
 
@@ -28,10 +30,12 @@ logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, chat_id: str | int = "default"):
         self.settings = get_settings()
         self.memory = Memory(db)
         self.brain_core = BrainCore(db)
+        self.conversation_state = ConversationStateManager(db, chat_id=chat_id)
+        self.role_router = RoleRouter()
         self.manager = ManagerAgent(self.settings)
         self.research = ResearchAgent(self.settings)
         self.finance_strategist = FinanceContentStrategist(self.settings)
@@ -56,18 +60,27 @@ class Orchestrator:
             "agents_used": result["agents_used"],
             "memories_used": result["memories_used"],
             "task_id": result["task_id"],
+            "format_message": result.get("format_message", message),
         }
 
     def _run(self, prompt: str, chat_mode: bool) -> dict:
+        conversation = self.conversation_state.resolve(prompt)
+        effective_prompt = conversation.effective_prompt
+        role_spec = (
+            self.role_router.spec_for_intent(conversation.state.active_intent)
+            if conversation.is_follow_up and conversation.state and conversation.state.active_intent
+            else self.role_router.spec_for_text(effective_prompt)
+        )
         task = self.memory.create_task(prompt)
 
         try:
-            retrieved_memories = self.memory.retrieve_relevant_memories(prompt, limit=7)
+            retrieved_memories = self.memory.retrieve_relevant_memories(effective_prompt, limit=7)
             brain_context = "\n\n".join(
                 part for part in (self.brain_core.context_for_agents(), self.goal_engine.goal_context()) if part
             )
-            memory_context = self._build_agent_context(brain_context, retrieved_memories)
-            productivity_result = self._handle_productivity_command(prompt, brain_context, memory_context)
+            role_context = self.role_router.context_for_prompt(role_spec)
+            memory_context = self._build_agent_context(brain_context, retrieved_memories, conversation.context, role_context)
+            productivity_result = self._handle_productivity_command(effective_prompt, brain_context, memory_context)
             if productivity_result:
                 final_answer = productivity_result["final_answer"]
                 agent_name = productivity_result["agent_name"]
@@ -75,12 +88,21 @@ class Orchestrator:
                 self.memory.complete_task(task.id, final_answer)
                 saved_memories = self._curate_and_save_memories(
                     task_id=task.id,
-                    prompt=prompt,
+                    prompt=effective_prompt,
                     agents_to_use=[agent_name, "manager"],
                     results={agent_name: final_answer},
                     final_answer=final_answer,
                 )
-                self._maybe_update_brain_state(prompt, [agent_name, "manager"], len(saved_memories))
+                self._maybe_update_brain_state(effective_prompt, [agent_name, "manager"], len(saved_memories))
+                self._update_conversation_state(
+                    user_prompt=prompt,
+                    effective_prompt=effective_prompt,
+                    final_answer=final_answer,
+                    agents_used=[agent_name, "manager"],
+                    active_intent=role_spec.intent,
+                    last_output_type=role_spec.output_type,
+                    task_id=task.id,
+                )
                 return {
                     "task_id": task.id,
                     "agents_used": [agent_name, "manager"],
@@ -89,9 +111,10 @@ class Orchestrator:
                     "memories_used": self._serialize_retrieved_memories(retrieved_memories),
                     "agents_used_memory": [agent_name, "manager"] if retrieved_memories else [],
                     "memories_saved": len(saved_memories),
+                    "format_message": effective_prompt,
                 }
 
-            agents_to_use = self.manager.choose_agents(prompt)
+            agents_to_use = self._agents_for_prompt(effective_prompt, conversation, role_spec)
             results: dict[str, str] = {}
             agents_used_memory = agents_to_use + ["manager"] if retrieved_memories else []
 
@@ -99,17 +122,26 @@ class Orchestrator:
             self._log_retrieved_memories(retrieved_memories, agents_used_memory)
 
             if chat_mode and not agents_to_use:
-                final_answer = self.manager.respond_directly(prompt, memory_context=memory_context)
+                final_answer = self.manager.respond_directly(effective_prompt, memory_context=memory_context)
                 self.memory.save_agent_result(task.id, "manager", final_answer)
                 self.memory.complete_task(task.id, final_answer)
                 saved_memories = self._curate_and_save_memories(
                     task_id=task.id,
-                    prompt=prompt,
+                    prompt=effective_prompt,
                     agents_to_use=["manager"],
                     results={},
                     final_answer=final_answer,
                 )
-                self._maybe_update_brain_state(prompt, ["manager"], len(saved_memories))
+                self._maybe_update_brain_state(effective_prompt, ["manager"], len(saved_memories))
+                self._update_conversation_state(
+                    user_prompt=prompt,
+                    effective_prompt=effective_prompt,
+                    final_answer=final_answer,
+                    agents_used=["manager"],
+                    active_intent=role_spec.intent,
+                    last_output_type=role_spec.output_type,
+                    task_id=task.id,
+                )
 
                 return {
                     "task_id": task.id,
@@ -119,16 +151,17 @@ class Orchestrator:
                     "memories_used": self._serialize_retrieved_memories(retrieved_memories),
                     "agents_used_memory": ["manager"] if retrieved_memories else [],
                     "memories_saved": len(saved_memories),
+                    "format_message": effective_prompt,
                 }
 
             if "research" in agents_to_use:
-                research_output = self.research.run(prompt, memory_context=memory_context)
+                research_output = self.research.run(effective_prompt, memory_context=memory_context)
                 results["research"] = research_output
                 self.memory.save_agent_result(task.id, "research", research_output)
 
             if "finance_strategist" in agents_to_use:
                 finance_output = self.finance_strategist.run(
-                    prompt,
+                    effective_prompt,
                     research_context=results.get("research"),
                     memory_context=memory_context,
                 )
@@ -137,7 +170,7 @@ class Orchestrator:
 
             if "content_planner" in agents_to_use:
                 planner_payload = self.content_planner.plan_week(
-                    prompt,
+                    effective_prompt,
                     brain_context=brain_context,
                     memory_context=memory_context,
                 )
@@ -154,24 +187,33 @@ class Orchestrator:
                     context for context in (research_context, finance_context, planner_context) if context
                 )
                 content_output = self.content.run(
-                    prompt,
+                    effective_prompt,
                     research_context=combined_context or None,
                     memory_context=memory_context,
                 )
                 results["content"] = content_output
                 self.memory.save_agent_result(task.id, "content", content_output)
 
-            final_answer = self.manager.synthesize(prompt, results, memory_context=memory_context)
+            final_answer = self.manager.synthesize(effective_prompt, results, memory_context=memory_context)
             self.memory.save_agent_result(task.id, "manager", final_answer)
             self.memory.complete_task(task.id, final_answer)
             saved_memories = self._curate_and_save_memories(
                 task_id=task.id,
-                prompt=prompt,
+                prompt=effective_prompt,
                 agents_to_use=agents_to_use,
                 results=results,
                 final_answer=final_answer,
             )
-            self._maybe_update_brain_state(prompt, agents_to_use, len(saved_memories))
+            self._maybe_update_brain_state(effective_prompt, agents_to_use, len(saved_memories))
+            self._update_conversation_state(
+                user_prompt=prompt,
+                effective_prompt=effective_prompt,
+                final_answer=final_answer,
+                agents_used=agents_to_use or ["manager"],
+                active_intent=role_spec.intent,
+                last_output_type=role_spec.output_type,
+                task_id=task.id,
+            )
 
             return {
                 "task_id": task.id,
@@ -181,6 +223,7 @@ class Orchestrator:
                 "memories_used": self._serialize_retrieved_memories(retrieved_memories),
                 "agents_used_memory": agents_used_memory,
                 "memories_saved": len(saved_memories),
+                "format_message": effective_prompt,
             }
         except Exception as exc:
             error = f"Errore durante l'esecuzione del task: {exc}"
@@ -215,14 +258,67 @@ class Orchestrator:
     def _format_memory_context(self, memories: list[dict[str, Any]]) -> str:
         return self.memory.build_context_from_memory(memories)
 
-    def _build_agent_context(self, brain_context: str, retrieved_memories: list[dict[str, Any]]) -> str:
+    def _agents_for_prompt(self, prompt: str, conversation, role_spec) -> list[str]:
+        if conversation.is_follow_up and conversation.state:
+            active_agent = conversation.state.active_agent
+            if role_spec.intent == "content_creation" or active_agent == "content":
+                return ["content"]
+            if role_spec.intent == "strategy" or active_agent == "finance_strategist":
+                return ["finance_strategist"]
+            if role_spec.intent == "business_analysis" or active_agent == "research":
+                return ["research"]
+            if role_spec.intent == "task_management":
+                return []
+            if role_spec.intent == "goal_review":
+                return []
+        return self.manager.choose_agents(prompt)
+
+    def _build_agent_context(
+        self,
+        brain_context: str,
+        retrieved_memories: list[dict[str, Any]],
+        conversation_context: str = "",
+        role_context: str = "",
+    ) -> str:
         memory_context = self.memory.build_context_from_memory(retrieved_memories)
         parts = []
+        if conversation_context:
+            parts.append(conversation_context)
+        if role_context:
+            parts.append(role_context)
         if brain_context:
             parts.append(f"BRAIN STATE SUMMARY\n{brain_context}")
         if memory_context:
             parts.append(memory_context)
         return "\n\n".join(parts)
+
+    def _update_conversation_state(
+        self,
+        user_prompt: str,
+        effective_prompt: str,
+        final_answer: str,
+        agents_used: list[str],
+        active_intent: str,
+        last_output_type: str,
+        task_id: int,
+    ) -> None:
+        best_goal = self.goal_engine.best_goal_for_text(f"{effective_prompt}\n{final_answer}")
+        self.conversation_state.update_after_response(
+            user_message=user_prompt,
+            effective_prompt=effective_prompt,
+            final_answer=final_answer,
+            agents_used=agents_used,
+            active_intent=active_intent,
+            last_output_type=last_output_type,
+            active_goal=best_goal.title if best_goal else None,
+            task_id=task_id,
+        )
+        logger.info(
+            "Conversation state updated topic=%r agents=%s task_id=%s",
+            self.conversation_state.extract_topic(effective_prompt),
+            ", ".join(agents_used),
+            task_id,
+        )
 
     def _maybe_update_brain_state(self, prompt: str, agents_to_use: list[str], saved_memories_count: int) -> None:
         if self.brain_core.should_update_after_task(prompt, agents_to_use, saved_memories_count):

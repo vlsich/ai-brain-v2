@@ -139,9 +139,29 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"Creami il piano editoriale della settimana"}'
 ```
 
+Esempio stato conversazionale e follow-up:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id":"manual-test","message":"Scrivi un post LinkedIn sugli ETF per il personal brand finance di Michele"}'
+```
+
+Poi continua nella stessa conversazione:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id":"manual-test","message":"e il resto?"}'
+```
+
+Risultato atteso: AI Brain continua o completa il post LinkedIn precedente, invece di trattare `e il resto?` come una nuova domanda.
+
 ## Telegram Bot
 
 Telegram puo essere usato come interfaccia principale di AI Brain. Ogni messaggio testuale viene inviato alla stessa logica di `POST /chat`, quindi usa retrieval, agenti, memoria persistente e Memory Curator.
+
+Il bot mantiene anche uno stato conversazionale per chat Telegram: se scrivi `continua`, `e il resto?`, `approfondisci`, `finiscilo` o `fammi la versione completa`, AI Brain riprende topic, task, agente e contenuto precedente.
 
 Prima dell'invio, `ResponseFormatter` ripulisce e adatta la risposta per Telegram:
 

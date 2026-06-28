@@ -71,7 +71,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.chat.send_action(action=ChatAction.TYPING)
 
     try:
-        result = await asyncio.to_thread(run_chat, message)
+        chat_id = update.effective_chat.id if update.effective_chat else "telegram"
+        result = await asyncio.to_thread(run_chat, message, chat_id)
         await reply_text(update, result["reply"])
         logger.info(
             "Telegram reply sent task_id=%s agents=%s memories=%s length=%s quality_score=%s",
@@ -89,14 +90,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
 
-def run_chat(message: str) -> dict:
+def run_chat(message: str, chat_id: str | int = "telegram") -> dict:
     db = SessionLocal()
     try:
-        orchestrator = Orchestrator(db)
+        orchestrator = Orchestrator(db, chat_id=chat_id)
         result = orchestrator.handle_chat(message)
         settings = get_settings()
         formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
-        result["reply"] = formatter.format_telegram(message, result["reply"])
+        result["reply"] = formatter.format_telegram(result.get("format_message", message), result["reply"])
         result["quality_score"] = formatter.quality_score(result["reply"])
         return result
     finally:

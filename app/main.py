@@ -34,6 +34,7 @@ class TaskRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, examples=["Chi sono?", "Creami una strategia TikTok"])
+    chat_id: Optional[str] = Field(default="api", examples=["api", "telegram-123"])
 
 
 class RetrievedMemoryResponse(BaseModel):
@@ -305,7 +306,7 @@ def create_task(payload: TaskRequest, db: Session = Depends(get_db)) -> dict:
     formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
     try:
         result = orchestrator.handle_task(payload.task)
-        result["final_answer"] = formatter.format_chat(payload.task, result["final_answer"])
+        result["final_answer"] = formatter.format_chat(result.get("format_message", payload.task), result["final_answer"])
         logger.info(
             "Response quality: endpoint=/task agents=%s memories=%s length=%s score=%s",
             ",".join(result["agents_used"]),
@@ -320,11 +321,11 @@ def create_task(payload: TaskRequest, db: Session = Depends(get_db)) -> dict:
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, db: Session = Depends(get_db)) -> dict:
-    orchestrator = Orchestrator(db)
+    orchestrator = Orchestrator(db, chat_id=payload.chat_id or "api")
     formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
     try:
         result = orchestrator.handle_chat(payload.message)
-        result["reply"] = formatter.format_chat(payload.message, result["reply"])
+        result["reply"] = formatter.format_chat(result.get("format_message", payload.message), result["reply"])
         logger.info(
             "Response quality: endpoint=/chat agents=%s memories=%s length=%s score=%s",
             ",".join(result["agents_used"]),
