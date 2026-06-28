@@ -134,6 +134,10 @@ class ResponseFormatter:
             if structured:
                 return self._truncate(structured, max_chars, markdown=markdown)
 
+        if "proactive daily business briefing" in user_message.lower():
+            formatted = self._render_plain_text(str(raw_reply), markdown=markdown)
+            return self._truncate(formatted, max_chars, markdown=markdown)
+
         cleaned = self._clean_text(raw_reply)
         if not cleaned:
             cleaned = "Mi manca un dato essenziale per rispondere bene. Qual e il risultato concreto che vuoi ottenere?"
@@ -532,6 +536,10 @@ class ResponseFormatter:
                 for index, point in enumerate(clean_points, start=1)
             )
         return "\n".join(f"• {self._escape_html(point) if markdown else point}" for point in clean_points)
+
+    def _render_plain_text(self, text: str, markdown: bool) -> str:
+        text = re.sub(r"\n{3,}", "\n\n", text.strip())
+        return self._escape_html(text) if markdown else text
 
     def _format_structured(self, user_message: str, payload: Any, markdown: bool) -> str:
         if isinstance(payload, list):

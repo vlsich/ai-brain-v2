@@ -227,3 +227,17 @@ class WeeklyReview(Base):
     related_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     related_project: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     related_topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+
+
+class ProactiveRecommendation(Base):
+    __tablename__ = "proactive_recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    category: Mapped[str] = mapped_column(String(64), default="business", nullable=False, index=True)
+    priority: Mapped[str] = mapped_column(String(32), default="medium", nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    suggested_action: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

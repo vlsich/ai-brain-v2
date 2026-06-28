@@ -152,6 +152,22 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"Creami il piano editoriale della settimana"}'
 ```
 
+Esempio Proactive Brain Loop:
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"briefing di oggi"}'
+```
+
+Altri comandi supportati:
+
+- `cosa dovrei fare oggi?`
+- `preparami la giornata`
+- `dammi il focus di oggi`
+
+Il briefing usa obiettivi attivi, task pendenti, decisioni recenti, memoria, calendario editoriale e Brain State Summary. Produce focus del giorno, top 3 priorita, idee contenuto, raccomandazioni business, rischi e prossime azioni.
+
 Esempio stato conversazionale e follow-up:
 
 ```bash
@@ -198,6 +214,9 @@ Esempi di messaggi:
 - `Creami una strategia TikTok per AI Brain`
 - `Proponi 5 contenuti LinkedIn coerenti con la mia strategia`
 - `Creami il piano editoriale della settimana`
+- `Briefing di oggi`
+- `Preparami la giornata`
+- `Dammi il focus di oggi`
 - `Dammi idee contenuto`
 - `Quali task devo fare oggi?`
 - `Briefing giornaliero`

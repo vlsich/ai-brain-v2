@@ -22,6 +22,7 @@ from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
 from app.memory import Memory
+from app.proactive_loop import ProactiveBrainLoop
 from app.role_router import RoleRouter
 from app.task_engine import TaskEngine
 
@@ -47,6 +48,7 @@ class Orchestrator:
         self.decision_journal = DecisionJournal(db)
         self.goal_engine = GoalEngine(db)
         self.goal_engine.ensure_default_goals()
+        self.proactive_loop = ProactiveBrainLoop(db)
         self.daily_review_agent = DailyReviewAgent(self.settings)
         self.weekly_review_agent = WeeklyReviewAgent(self.settings)
 
@@ -111,7 +113,7 @@ class Orchestrator:
                     "memories_used": self._serialize_retrieved_memories(retrieved_memories),
                     "agents_used_memory": [agent_name, "manager"] if retrieved_memories else [],
                     "memories_saved": len(saved_memories),
-                    "format_message": effective_prompt,
+                    "format_message": productivity_result.get("format_message", effective_prompt),
                 }
 
             agents_to_use = self._agents_for_prompt(effective_prompt, conversation, role_spec)
@@ -347,6 +349,14 @@ class Orchestrator:
         if goal_result:
             return goal_result
 
+        if self._is_proactive_briefing_command(normalized):
+            briefing = self.proactive_loop.generate_daily_briefing()
+            return {
+                "agent_name": "proactive_loop",
+                "final_answer": self.proactive_loop.format_for_telegram(briefing),
+                "format_message": "proactive daily business briefing",
+            }
+
         if self._is_complete_task_command(normalized):
             completed = self.task_engine.complete_task_from_text(prompt)
             if not completed:
@@ -549,6 +559,16 @@ class Orchestrator:
         if not match:
             match = re.search(r"(?:progresso|progress)\s+\d+\s+(?:a|al|=)\s*(.+)$", text, flags=re.IGNORECASE)
         return match.group(1).strip() if match else None
+
+    def _is_proactive_briefing_command(self, normalized: str) -> bool:
+        patterns = (
+            "briefing di oggi",
+            "cosa dovrei fare oggi",
+            "preparami la giornata",
+            "dammi il focus di oggi",
+            "focus di oggi",
+        )
+        return any(pattern in normalized for pattern in patterns)
 
     def _is_today_tasks_command(self, normalized: str) -> bool:
         patterns = (
