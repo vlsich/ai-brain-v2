@@ -292,9 +292,7 @@ class ResponseFormatter:
 
     def _render_content_creation(self, cleaned: str, user_message: str, markdown: bool) -> str:
         content = self._strip_explanatory_preface(cleaned)
-        blocks = self._content_blocks(content)
-        if not blocks:
-            blocks = [("# Hook", "Apri con un problema specifico e riconoscibile."), ("CTA", "Invita a salvare o rispondere con il dubbio principale.")]
+        blocks = [] if self._contains_internal_context(content) else self._content_blocks(content)
         blocks = self._ensure_complete_content_blocks(blocks, user_message)
 
         rendered = []
@@ -343,7 +341,15 @@ class ResponseFormatter:
             if not has_hook:
                 completed.insert(0, ("Hook iniziale", f"Gli {topic} non sono complicati. Il problema e che molti li comprano senza sapere cosa stanno comprando."))
             if not has_body:
-                completed.append(("Script parlato", f\"Quando valuti un ETF, non partire dal rendimento passato. Parti da tre cose: quale indice replica, quanto costa ogni anno e se e coerente con il tuo orizzonte temporale. Un ETF puo essere uno strumento semplice, ma solo se lo inserisci dentro un metodo. Se lo scegli perche 'sta salendo', non stai investendo: stai inseguendo.\")
+                completed.append(
+                    (
+                        "Script parlato",
+                        "Quando valuti un ETF, non partire dal rendimento passato. "
+                        "Parti da tre cose: quale indice replica, quanto costa ogni anno e se e coerente con il tuo orizzonte temporale. "
+                        "Un ETF puo essere uno strumento semplice, ma solo se lo inserisci dentro un metodo. "
+                        "Se lo scegli perche 'sta salendo', non stai investendo: stai inseguendo.",
+                    )
+                )
             if not has_visual:
                 completed.append(("Visual / scena", "Parla in camera. A schermo mostra 3 parole: indice, costi, orizzonte. Chiudi con una mini-checklist visuale."))
             if not has_cta:
@@ -356,7 +362,17 @@ class ResponseFormatter:
             if not has_hook:
                 completed.insert(0, ("Hook", f"Gli {topic} sono semplici da comprare. Ma non sempre sono semplici da capire."))
             if not has_body:
-                completed.append(("Corpo del post", f\"Molti investitori scelgono un ETF partendo dalla domanda sbagliata: 'quanto ha reso?'.\\n\\nLa domanda migliore e: cosa replica? Quanto costa? E soprattutto: e coerente con il mio obiettivo?\\n\\nUn ETF non e una strategia. E uno strumento.\\n\\nLa strategia nasce prima: orizzonte temporale, rischio accettabile, capitale da investire e regole per non cambiare idea al primo movimento di mercato.\\n\\nSe parti dallo strumento, rischi di inseguire performance. Se parti dal metodo, costruisci decisioni piu solide.\")
+                completed.append(
+                    (
+                        "Corpo del post",
+                        "Molti investitori scelgono un ETF partendo dalla domanda sbagliata: 'quanto ha reso?'.\n\n"
+                        "La domanda migliore e: cosa replica? Quanto costa? E soprattutto: e coerente con il mio obiettivo?\n\n"
+                        "Un ETF non e una strategia. E uno strumento.\n\n"
+                        "La strategia nasce prima: orizzonte temporale, rischio accettabile, capitale da investire e regole "
+                        "per non cambiare idea al primo movimento di mercato.\n\n"
+                        "Se parti dallo strumento, rischi di inseguire performance. Se parti dal metodo, costruisci decisioni piu solide.",
+                    )
+                )
             if not has_cta:
                 completed.append(("CTA", "Prima di scegliere il prossimo ETF, scrivi nero su bianco obiettivo, durata e rischio massimo."))
             if "hashtag" not in normalized_titles:
@@ -382,6 +398,9 @@ class ResponseFormatter:
 
     def _content_topic_from_text(self, user_message: str, blocks: list[tuple[str, str]]) -> str:
         text = user_message
+        joined = " ".join(body for _, body in blocks)
+        if "etf" in f"{text} {joined}".lower():
+            return "ETF"
         topic_patterns = (
             r"riguardo\s+([^.\n]+)",
             r"sugli?\s+([^.\n]+)",
@@ -392,13 +411,26 @@ class ResponseFormatter:
             match = re.search(pattern, text, flags=re.IGNORECASE)
             if match:
                 return self._clean_content_topic(match.group(1))
-        joined = " ".join(body for _, body in blocks)
-        if "etf" in f"{text} {joined}".lower():
-            return "ETF"
         return "questo tema"
 
+    def _contains_internal_context(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(
+            marker in lowered
+            for marker in (
+                "role routing",
+                "conversation state",
+                "brain state summary",
+                "the user is sending a follow-up message",
+                "previous active topic",
+                "previous generated content",
+                "memorie usate",
+                "completion rules",
+            )
+        )
+
     def _clean_content_topic(self, topic: str) -> str:
-        topic = re.sub(r"\b(per|il|la|lo|un|una|di|del|della|nel|nella|mio|tuo|semplice|contenuto)\b", " ", topic, flags=re.IGNORECASE)
+        topic = re.sub(r"\b(per|il|la|lo|gli|le|un|una|di|del|della|nel|nella|mio|tuo|semplice|contenuto)\b", " ", topic, flags=re.IGNORECASE)
         topic = re.sub(r"\s+", " ", topic).strip(" .:;?")
         return topic.upper() if topic.lower() == "etf" else topic
 

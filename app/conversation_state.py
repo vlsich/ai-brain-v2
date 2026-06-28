@@ -272,8 +272,10 @@ class ConversationStateManager:
         return "linkedin_post"
 
     def extract_content_topic(self, text: str) -> str:
+        if "etf" in text.lower():
+            return "ETF"
         clean = re.sub(r"(?i)\b(crea|scrivi|fammi|prepara|genera|dammi|proponi|sviluppa|trasformalo|adattalo)\b", "", text)
-        clean = re.sub(r"(?i)\b(un|una|il|la|lo|post|contenuto|script|caption|reel|tiktok|linkedin|carousel|carosello|newsletter|video|versione|per|su|riguardo|about)\b", " ", clean)
+        clean = re.sub(r"(?i)\b(aiutami|creare|un|una|il|la|lo|gli|le|semplice|post|contenuto|script|caption|reel|tiktok|linkedin|carousel|carosello|newsletter|video|versione|per|su|riguardo|about)\b", " ", clean)
         clean = re.sub(r"\s+", " ", clean).strip(" .:;")
         return (clean or self.extract_topic(text))[:255]
 
