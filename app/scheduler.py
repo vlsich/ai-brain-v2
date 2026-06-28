@@ -10,6 +10,7 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import Application
 
+from app.agents.autonomous_daily_worker import AutonomousDailyWorker
 from app.brain_core import BrainCore
 from app.config import Settings, get_settings
 from app.database import SessionLocal
@@ -42,7 +43,7 @@ class AutonomousScheduler:
             logger.info("Autonomous scheduler disabled by SCHEDULER_ENABLED=false")
             return
         if not self.settings.telegram_admin_chat_id:
-            logger.info("Autonomous scheduler disabled: TELEGRAM_ADMIN_CHAT_ID is missing")
+            logger.warning("Autonomous scheduler disabled: TELEGRAM_ADMIN_CHAT_ID is missing")
             return
         if self._task and not self._task.done():
             return
@@ -104,9 +105,9 @@ class AutonomousScheduler:
     def _daily_briefing(self) -> str:
         db = SessionLocal()
         try:
-            briefing = ProactiveBrainLoop(db).generate_daily_briefing()
-            text = ProactiveBrainLoop(db).format_for_telegram(briefing)
-            return self._format("scheduled daily briefing", text)
+            logger.info("Running scheduled AutonomousDailyWorker")
+            text = AutonomousDailyWorker(db).run()
+            return self._format("autonomous daily worker briefing", text)
         finally:
             db.close()
 
@@ -198,6 +199,7 @@ class AutonomousScheduler:
     async def _send_to_admin(self, text: str) -> None:
         chat_id = self.settings.telegram_admin_chat_id
         if not chat_id:
+            logger.warning("Cannot send scheduled briefing: TELEGRAM_ADMIN_CHAT_ID is missing")
             return
         for chunk in self._split_message(text):
             try:

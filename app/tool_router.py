@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.agents.autonomous_daily_worker import AutonomousDailyWorker
 from app.brain_core import BrainCore
 from app.decision_journal import DecisionJournal
 from app.goal_engine import GoalEngine
@@ -31,6 +32,7 @@ class ToolRouter:
         self.task_engine = TaskEngine(db)
         self.decision_journal = DecisionJournal(db)
         self.proactive_loop = ProactiveBrainLoop(db)
+        self.autonomous_daily_worker = AutonomousDailyWorker(db)
         self.goal_content_pipeline = GoalToContentPipeline(db)
         self.knowledge_graph = KnowledgeGraph(db)
         self.graph_intelligence = GraphIntelligence(db)
@@ -63,6 +65,14 @@ class ToolRouter:
                 response=self.proactive_loop.format_for_telegram(briefing),
                 tool_name="proactive_loop",
                 format_message="proactive daily business briefing",
+            )
+
+        if self._matches(normalized, ("genera briefing automatico", "daily worker", "lavora per me oggi")):
+            return ToolResult(
+                handled=True,
+                response=self.autonomous_daily_worker.run(),
+                tool_name="autonomous_daily_worker",
+                format_message="autonomous daily worker briefing",
             )
 
         if self._matches(normalized, ("piano operativo settimanale", "trasforma i miei obiettivi in contenuti", "genera task dai miei obiettivi")):
