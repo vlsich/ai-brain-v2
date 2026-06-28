@@ -104,7 +104,7 @@ Lo scheduler gira solo nel servizio Telegram bot, non nel servizio web FastAPI.
 
 Routine automatiche:
 
-- briefing giornaliero ogni mattina
+- briefing giornaliero ogni mattina tramite `AutonomousDailyWorker`
 - review settimanale la domenica sera
 - refresh quotidiano del Brain State
 - analisi quotidiana del Knowledge Graph
@@ -130,6 +130,14 @@ Disabilitare lo scheduler:
 ```env
 SCHEDULER_ENABLED=false
 ```
+
+Trigger manuali del Daily Worker da Telegram/chat:
+
+- `genera briefing automatico`
+- `daily worker`
+- `lavora per me oggi`
+
+Il worker analizza obiettivi attivi, task pendenti, calendario editoriale, decisioni recenti, memorie recenti, Brain State e Knowledge Graph. Se `TELEGRAM_ADMIN_CHAT_ID` non è configurato, il bot non invia briefing automatici e registra un warning nei log.
 
 Avvio con script production-like:
 

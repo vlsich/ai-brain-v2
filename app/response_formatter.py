@@ -547,6 +547,7 @@ class ResponseFormatter:
             marker in lowered
             for marker in (
                 "proactive daily business briefing",
+                "autonomous daily worker briefing",
                 "goal to content weekly execution plan",
                 "decision support framework",
                 "second brain update",
