@@ -70,8 +70,8 @@ class AutonomousScheduler:
         now = datetime.now()
         if now.hour >= self.settings.scheduler_daily_briefing_hour:
             await self._run_once_per_day("daily_briefing", now, self._daily_briefing)
-            await self._run_once_per_day("brain_state_refresh", now, self._brain_state_refresh)
-            await self._run_once_per_day("graph_analysis", now, self._graph_analysis)
+            await self._run_silent_once_per_day("brain_state_refresh", now, self._brain_state_refresh)
+            await self._run_silent_once_per_day("graph_analysis", now, self._graph_analysis)
 
         if now.weekday() == 6 and now.hour >= self.settings.scheduler_weekly_review_hour:
             await self._run_once_per_week("weekly_review", now, self._weekly_review)
@@ -83,6 +83,14 @@ class AutonomousScheduler:
         text = await asyncio.to_thread(job)
         await self._send_to_admin(text)
         self._mark_run(job_name, period_key)
+
+    async def _run_silent_once_per_day(self, job_name: str, now: datetime, job: Callable[[], str]) -> None:
+        period_key = now.strftime("%Y-%m-%d")
+        if self._already_ran(job_name, period_key):
+            return
+        await asyncio.to_thread(job)
+        self._mark_run(job_name, period_key)
+        logger.info("Scheduled silent job completed: %s period=%s", job_name, period_key)
 
     async def _run_once_per_week(self, job_name: str, now: datetime, job: Callable[[], str]) -> None:
         year, week, _ = now.isocalendar()

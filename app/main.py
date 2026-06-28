@@ -11,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.brain_core import BrainCore
+from app.brain_os import BrainOS
 from app.config import get_settings
 from app.dashboard import DASHBOARD_HTML
 from app.database import SessionLocal, get_db, init_db
@@ -21,7 +22,6 @@ from app.graph_intelligence import GraphIntelligence
 from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
 from app.models import DailyReview, WeeklyReview
-from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
 from app.semantic_memory import SemanticMemory
 from app.task_engine import TaskEngine
@@ -319,11 +319,10 @@ def dashboard() -> HTMLResponse:
 
 @app.post("/task", response_model=TaskResponse)
 def create_task(payload: TaskRequest, db: Session = Depends(get_db)) -> dict:
-    orchestrator = Orchestrator(db)
+    brain_os = BrainOS(db, chat_id="api", telegram_mode=False)
     formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
     try:
-        result = orchestrator.handle_task(payload.task)
-        result["final_answer"] = formatter.format_chat(result.get("format_message", payload.task), result["final_answer"])
+        result = brain_os.handle_task(payload.task)
         logger.info(
             "Response quality: endpoint=/task agents=%s memories=%s length=%s score=%s",
             ",".join(result["agents_used"]),
@@ -338,11 +337,10 @@ def create_task(payload: TaskRequest, db: Session = Depends(get_db)) -> dict:
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, db: Session = Depends(get_db)) -> dict:
-    orchestrator = Orchestrator(db, chat_id=payload.chat_id or "api")
+    brain_os = BrainOS(db, chat_id=payload.chat_id or "api", telegram_mode=False)
     formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
     try:
-        result = orchestrator.handle_chat(payload.message)
-        result["reply"] = formatter.format_chat(result.get("format_message", payload.message), result["reply"])
+        result = brain_os.handle_chat(payload.message)
         logger.info(
             "Response quality: endpoint=/chat agents=%s memories=%s length=%s score=%s",
             ",".join(result["agents_used"]),

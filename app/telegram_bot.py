@@ -10,11 +10,11 @@ from telegram.error import TelegramError
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from app.brain_core import BrainCore
+from app.brain_os import BrainOS
 from app.config import get_settings
 from app.database import SessionLocal, init_db
 from app.knowledge_graph import KnowledgeGraph
 from app.memory import Memory
-from app.orchestrator import Orchestrator
 from app.response_formatter import ResponseFormatter
 from app.scheduler import AutonomousScheduler
 from app.semantic_memory import SemanticMemory
@@ -102,12 +102,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 def run_chat(message: str, chat_id: str | int = "telegram") -> dict:
     db = SessionLocal()
     try:
-        orchestrator = Orchestrator(db, chat_id=chat_id)
-        result = orchestrator.handle_chat(message)
-        settings = get_settings()
-        formatter = ResponseFormatter(telegram_max_chars=settings.telegram_max_response_chars)
-        result["reply"] = formatter.format_telegram(result.get("format_message", message), result["reply"])
-        result["quality_score"] = formatter.quality_score(result["reply"])
+        brain_os = BrainOS(db, chat_id=chat_id, telegram_mode=True)
+        result = brain_os.handle_chat(message)
+        result["quality_score"] = ResponseFormatter(get_settings().telegram_max_response_chars).quality_score(result["reply"])
         return result
     finally:
         db.close()

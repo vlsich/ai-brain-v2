@@ -71,6 +71,15 @@ ROLE_SPECS = {
 
 
 class RoleRouter:
+    INTENT_ALIASES = {
+        "content": "content_creation",
+        "strategy": "strategy",
+        "goals": "goal_review",
+        "tasks": "task_management",
+        "decisions": "decision_support",
+        "research": "business_analysis",
+    }
+
     def detect_intent(self, text: str) -> str:
         normalized = text.lower()
         if self._is_content_intent(normalized):
@@ -146,6 +155,7 @@ class RoleRouter:
         return self.spec_for_intent(self.detect_intent(text))
 
     def spec_for_intent(self, intent: str) -> RoleSpec:
+        intent = self.INTENT_ALIASES.get(intent, intent)
         return ROLE_SPECS.get(intent, ROLE_SPECS["conversation"])
 
     def context_for_prompt(self, spec: RoleSpec) -> str:

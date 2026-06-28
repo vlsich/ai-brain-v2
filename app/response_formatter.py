@@ -559,6 +559,9 @@ class ResponseFormatter:
                 "scheduled weekly review",
                 "scheduled brain state refresh",
                 "scheduled graph intelligence insights",
+                "tool direct chat id",
+                "tool goal list",
+                "tool decision list",
             )
         )
 

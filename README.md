@@ -34,6 +34,27 @@ Il sistema assegna anche un ruolo professionale in base all'intent:
 - `goals`: CEO/Manager Agent
 - `decisions`: Executive Advisor
 
+## AI Brain V3 Architecture
+
+AI Brain V3 introduce un livello di Cognitive Operating System sopra i moduli esistenti.
+
+Layer principali:
+
+- `BrainOS` (`app/brain_os.py`): coordinatore centrale. Riceve input, risolve contesto, chiama ToolRouter o agenti, aggiorna lo stato conversazionale e restituisce la risposta finale.
+- `ToolRouter` (`app/tool_router.py`): intercetta comandi diretti prima di qualunque LLM. Esempi: `qual è il mio chat id?`, `mostra obiettivi`, `briefing di oggi`, `ricostruisci graph`.
+- `RoleRouter` (`app/role_router.py`): assegna il ruolo professionale: Content Director, Strategy Advisor, CEO Agent, Operations Manager, Executive Advisor o Research Analyst.
+- `CognitiveContextBuilder` (`app/context_builder.py`): costruisce il contesto prima delle chiamate cognitive usando Brain State, memorie semantiche, obiettivi, task, decisioni, stato conversazionale e insight del Knowledge Graph.
+- `ResponseSynthesizer` (`app/response_synthesizer.py`): produce la risposta finale naturale, senza JSON grezzo e senza template corporate forzati.
+
+Execution flow:
+
+1. Telegram o API inviano un messaggio a `BrainOS`.
+2. `CognitiveContextBuilder` risolve stato conversazionale, intent, ruolo e contesto.
+3. `ToolRouter` prova a gestire comandi di sistema senza LLM.
+4. Se non è un comando diretto, `BrainOS` delega agli agenti esistenti tramite orchestrator.
+5. `ResponseSynthesizer` adatta la risposta al canale e all'intent.
+6. Lo stato conversazionale viene aggiornato e la memoria resta compatibile con i sistemi esistenti.
+
 ## Setup
 
 ```bash
@@ -49,7 +70,14 @@ Per usare Telegram, crea un bot con BotFather e inserisci il token:
 
 ```env
 TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_ADMIN_CHAT_ID=123456789
 TELEGRAM_MAX_RESPONSE_CHARS=2500
+```
+
+Per scoprire il tuo chat id, avvia il bot e scrivi:
+
+```text
+qual è il mio chat id?
 ```
 
 ## Avvio
@@ -68,6 +96,39 @@ Avvio Telegram Bot:
 
 ```bash
 python -m app.telegram_bot
+```
+
+## Autonomous Scheduler
+
+Lo scheduler gira solo nel servizio Telegram bot, non nel servizio web FastAPI.
+
+Routine automatiche:
+
+- briefing giornaliero ogni mattina
+- review settimanale la domenica sera
+- refresh quotidiano del Brain State
+- analisi quotidiana del Knowledge Graph
+
+Per evitare spam:
+
+- massimo 1 briefing giornaliero al giorno
+- massimo 1 review settimanale a settimana
+- Brain State refresh e Graph Analysis girano in silenzio
+
+Configurazione:
+
+```env
+TELEGRAM_ADMIN_CHAT_ID=123456789
+SCHEDULER_ENABLED=true
+SCHEDULER_DAILY_BRIEFING_HOUR=8
+SCHEDULER_WEEKLY_REVIEW_HOUR=18
+SCHEDULER_TICK_SECONDS=60
+```
+
+Disabilitare lo scheduler:
+
+```env
+SCHEDULER_ENABLED=false
 ```
 
 Avvio con script production-like:
@@ -695,10 +756,12 @@ Variabili ambiente richieste su Railway:
 ```env
 OPENAI_API_KEY=...
 TELEGRAM_BOT_TOKEN=...
+TELEGRAM_ADMIN_CHAT_ID=...
 DATABASE_URL=...
 OPENAI_MODEL=gpt-4o-mini
 APP_ENV=production
 TELEGRAM_MAX_RESPONSE_CHARS=2500
+SCHEDULER_ENABLED=true
 ```
 
 Railway imposta automaticamente `PORT` per il servizio web. Lo script `start_web.sh` usa quel valore.
@@ -727,7 +790,7 @@ Crea un secondo servizio Railway dallo stesso repo e usa:
 ./scripts/start_bot.sh
 ```
 
-Il bot usa `python-telegram-bot` in polling. Deve avere `TELEGRAM_BOT_TOKEN` configurato. Non serve esporre una porta pubblica per il servizio bot.
+Il bot usa `python-telegram-bot` in polling. Deve avere `TELEGRAM_BOT_TOKEN` configurato. Per ricevere briefing automatici imposta anche `TELEGRAM_ADMIN_CHAT_ID`. Non serve esporre una porta pubblica per il servizio bot.
 
 ### Database
 
