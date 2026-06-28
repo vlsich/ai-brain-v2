@@ -18,6 +18,7 @@ from app.agents.weekly_review_agent import WeeklyReviewAgent
 from app.brain_core import BrainCore
 from app.config import get_settings
 from app.conversation_state import ConversationStateManager
+from app.decision_engine import DecisionEngine
 from app.decision_journal import DecisionJournal
 from app.editorial_calendar import EditorialCalendar
 from app.goal_engine import GoalEngine
@@ -46,6 +47,7 @@ class Orchestrator:
         self.editorial_calendar = EditorialCalendar(db)
         self.task_engine = TaskEngine(db)
         self.decision_journal = DecisionJournal(db)
+        self.decision_engine = DecisionEngine(db)
         self.goal_engine = GoalEngine(db)
         self.goal_engine.ensure_default_goals()
         self.proactive_loop = ProactiveBrainLoop(db)
@@ -366,6 +368,14 @@ class Orchestrator:
                 "format_message": "proactive daily business briefing",
             }
 
+        if self._is_decision_engine_command(normalized):
+            brief = self.decision_engine.evaluate(prompt, save=self._is_save_decision_command(normalized))
+            return {
+                "agent_name": "decision_engine",
+                "final_answer": self.decision_engine.format_for_telegram(brief),
+                "format_message": "decision support framework",
+            }
+
         if self._is_complete_task_command(normalized):
             completed = self.task_engine.complete_task_from_text(prompt)
             if not completed:
@@ -379,17 +389,6 @@ class Orchestrator:
             return {
                 "agent_name": "task_engine",
                 "final_answer": f"Task completato: {completed.id}. {completed.title}",
-            }
-
-        if self._is_save_decision_command(normalized):
-            decision = self.decision_journal.save_from_message(prompt)
-            return {
-                "agent_name": "decision_journal",
-                "final_answer": (
-                    "Decisione salvata.\n\n"
-                    f"{decision.id}. {decision.title}\n"
-                    f"Focus: {decision.related_topic or 'business strategy'}"
-                ),
             }
 
         if self._is_latest_decisions_command(normalized):
@@ -585,6 +584,18 @@ class Orchestrator:
             "creami contenuti in base agli obiettivi",
             "genera task dai miei obiettivi",
             "prepara piano operativo settimanale",
+        )
+        return any(pattern in normalized for pattern in patterns)
+
+    def _is_decision_engine_command(self, normalized: str) -> bool:
+        patterns = (
+            "aiutami a decidere",
+            "cosa mi consigli",
+            "valuta questa decisione",
+            "pro e contro",
+            "salva questa decisione",
+            "salva decisione",
+            "decisione:",
         )
         return any(pattern in normalized for pattern in patterns)
 

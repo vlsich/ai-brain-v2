@@ -75,7 +75,20 @@ class RoleRouter:
         normalized = text.lower()
         if self._is_content_intent(normalized):
             return "content_creation"
-        if any(term in normalized for term in ("decidere", "decisione", "scelta", "scegliere", "conviene", "cosa faresti")):
+        if any(
+            term in normalized
+            for term in (
+                "decidere",
+                "decisione",
+                "scelta",
+                "scegliere",
+                "conviene",
+                "cosa faresti",
+                "cosa mi consigli",
+                "pro e contro",
+                "valuta questa decisione",
+            )
+        ):
             return "decision_support"
         if any(term in normalized for term in ("obiettivo", "obiettivi", "goal", "progresso obiettivo")):
             return "goal_review"

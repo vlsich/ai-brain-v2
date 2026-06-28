@@ -238,6 +238,10 @@ Esempi di messaggi:
 - `Briefing giornaliero`
 - `Review settimanale`
 - `Mostrami le priorita`
+- `Aiutami a decidere se lanciare una newsletter`
+- `Pro e contro TikTok o LinkedIn`
+- `Cosa mi consigli per aumentare conversione audience?`
+- `Valuta questa decisione: concentrare i contenuti sugli ETF`
 - `Salva questa decisione: focus su TikTok per 30 giorni`
 - `Segna task completato 3`
 - `Quali sono i miei obiettivi?`
@@ -314,6 +318,7 @@ AI Brain include un layer produttivo per trasformare memoria, obiettivi e decisi
 Componenti:
 
 - `TaskEngine`: crea, aggiorna, completa e prioritizza task business.
+- `DecisionEngine`: valuta scelte strategiche con opzioni, pro, contro, rischi, raccomandazione e prossima azione.
 - `DecisionJournal`: salva decisioni strategiche di Michele.
 - `DailyReviewAgent`: genera briefing giornalieri.
 - `WeeklyReviewAgent`: genera review settimanali.
@@ -327,6 +332,16 @@ Ogni task, decisione e review salva metadati relazionali per il futuro Knowledge
 Il layer usa `Brain State Summary` e memory retrieval, con focus su finanza, investing, content creation, personal brand growth, audience building e monetizzazione.
 
 Quando crei task o decisioni senza `related_goal`, AI Brain prova a collegarli automaticamente all'obiettivo attivo piu coerente.
+
+Supporto decisionale via chat o Telegram:
+
+- `aiutami a decidere`
+- `cosa mi consigli?`
+- `valuta questa decisione`
+- `pro e contro`
+- `salva questa decisione`
+
+Il Decision Engine usa obiettivi attivi, task recenti, decisioni salvate, memoria, Brain State Summary e profilo business. Quando Michele chiede di salvare una decisione o scrive che ha deciso, il risultato viene registrato nel Decision Journal.
 
 Creare un task:
 

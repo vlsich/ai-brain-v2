@@ -548,6 +548,7 @@ class ResponseFormatter:
             for marker in (
                 "proactive daily business briefing",
                 "goal to content weekly execution plan",
+                "decision support framework",
             )
         )
 
