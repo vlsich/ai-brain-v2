@@ -16,7 +16,12 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_timeout_seconds: float = 20.0
     telegram_bot_token: Optional[str] = None
+    telegram_admin_chat_id: Optional[str] = None
     telegram_max_response_chars: int = 2500
+    scheduler_enabled: bool = True
+    scheduler_daily_briefing_hour: int = 8
+    scheduler_weekly_review_hour: int = 18
+    scheduler_tick_seconds: int = 60
     port: int = 8000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -31,6 +36,13 @@ class Settings(BaseSettings):
     @field_validator("telegram_bot_token", mode="before")
     @classmethod
     def empty_telegram_token_as_none(cls, value: Optional[str]) -> Optional[str]:
+        if value == "":
+            return None
+        return value
+
+    @field_validator("telegram_admin_chat_id", mode="before")
+    @classmethod
+    def empty_admin_chat_id_as_none(cls, value: Optional[str]) -> Optional[str]:
         if value == "":
             return None
         return value
