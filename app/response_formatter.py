@@ -313,47 +313,54 @@ class ResponseFormatter:
         if asks_only_hooks:
             return blocks
 
-        completed = list(blocks)
+        target_format = self._requested_content_format(normalized_request)
+        topic = self._content_topic_from_text(user_message, blocks)
+        generic_only = len(blocks) == 1 and self._normalize(blocks[0][0]) in {"contenuto", "content"}
+        completed = [] if generic_only and target_format in {"linkedin", "reel_tiktok", "carousel"} else list(blocks)
         has_hook = any("hook" in title for title in normalized_titles)
         has_cta = any("cta" in title or "call to action" in title for title in normalized_titles)
         has_body = any(title in normalized_titles for title in ("body", "corpo", "script", "post"))
         has_visual = any("visual" in title or "direzione" in title for title in normalized_titles)
         has_slide = any("slide" in title for title in normalized_titles)
 
-        if any(term in normalized_request for term in ("carousel", "carosello")):
+        if target_format == "carousel":
             if not has_slide:
                 completed.extend(
                     [
-                        ("Title", "Un errore finanziario che ti costa piu di quanto pensi"),
-                        ("Slide 1", "Il problema: molte persone investono senza una regola chiara."),
-                        ("Slide 2", "La conseguenza: ogni decisione dipende dall'emozione del momento."),
-                        ("Slide 3", "La soluzione: definisci obiettivo, orizzonte temporale e rischio massimo prima di investire."),
+                        ("Titolo", f"{topic}: cosa capire prima di investire"),
+                        ("Slide 1", f"Gli {topic} sembrano semplici, ma non vanno scelti a caso."),
+                        ("Slide 2", "Il primo errore e guardare solo il rendimento passato."),
+                        ("Slide 3", "La domanda giusta e: quale indice replica, quali costi ha e quanto e coerente col tuo obiettivo?"),
+                        ("Slide 4", "Usali come strumenti, non come scorciatoie: metodo, orizzonte temporale e rischio vengono prima."),
+                        ("Slide finale", "Prima di scegliere, scrivi obiettivo, durata dell'investimento e rischio massimo accettabile."),
                     ]
                 )
             if not has_cta:
-                completed.append(("CTA", "Salva il carosello e rivedi la tua prossima scelta finanziaria con questo schema."))
+                completed.append(("CTA", "Salva il carosello e usalo come checklist prima di valutare un ETF."))
             return completed
 
-        if any(term in normalized_request for term in ("tiktok", "video", "reel", "short", "script")):
+        if target_format == "reel_tiktok":
             if not has_hook:
-                completed.insert(0, ("Hook", "Il problema non e quanto guadagni, ma quanto controllo hai sulle tue decisioni finanziarie."))
+                completed.insert(0, ("Hook iniziale", f"Gli {topic} non sono complicati. Il problema e che molti li comprano senza sapere cosa stanno comprando."))
             if not has_body:
-                completed.append(("Script", "Parti da un errore comune, spiega perche costa caro e chiudi con una regola pratica in 3 passaggi."))
+                completed.append(("Script parlato", f\"Quando valuti un ETF, non partire dal rendimento passato. Parti da tre cose: quale indice replica, quanto costa ogni anno e se e coerente con il tuo orizzonte temporale. Un ETF puo essere uno strumento semplice, ma solo se lo inserisci dentro un metodo. Se lo scegli perche 'sta salendo', non stai investendo: stai inseguendo.\")
             if not has_visual:
-                completed.append(("Visual direction", "Parla in camera, usa testo grande per i 3 passaggi e mostra una checklist semplice a schermo."))
+                completed.append(("Visual / scena", "Parla in camera. A schermo mostra 3 parole: indice, costi, orizzonte. Chiudi con una mini-checklist visuale."))
             if not has_cta:
-                completed.append(("CTA", "Salva il video e scegli una decisione finanziaria da sistemare oggi."))
+                completed.append(("CTA finale", "Salva questo video prima di scegliere il prossimo ETF."))
+            if "caption breve" not in normalized_titles and "caption" not in normalized_titles:
+                completed.append(("Caption breve", f"Prima di scegliere un ETF, guarda queste 3 cose. Metodo prima del rendimento."))
             return completed
 
-        if any(term in normalized_request for term in ("linkedin", "post")):
+        if target_format == "linkedin":
             if not has_hook:
-                completed.insert(0, ("Hook", "La maggior parte delle persone non ha un problema di soldi: ha un problema di metodo."))
+                completed.insert(0, ("Hook", f"Gli {topic} sono semplici da comprare. Ma non sempre sono semplici da capire."))
             if not has_body:
-                completed.append(("Body", "Sviluppa il post con un problema concreto, 3 punti pratici e una chiusura che collega finanza personale, metodo e responsabilita."))
+                completed.append(("Corpo del post", f\"Molti investitori scelgono un ETF partendo dalla domanda sbagliata: 'quanto ha reso?'.\\n\\nLa domanda migliore e: cosa replica? Quanto costa? E soprattutto: e coerente con il mio obiettivo?\\n\\nUn ETF non e una strategia. E uno strumento.\\n\\nLa strategia nasce prima: orizzonte temporale, rischio accettabile, capitale da investire e regole per non cambiare idea al primo movimento di mercato.\\n\\nSe parti dallo strumento, rischi di inseguire performance. Se parti dal metodo, costruisci decisioni piu solide.\")
             if not has_cta:
-                completed.append(("CTA", "Qual e la decisione finanziaria che stai rimandando? Scrivimela nei commenti."))
+                completed.append(("CTA", "Prima di scegliere il prossimo ETF, scrivi nero su bianco obiettivo, durata e rischio massimo."))
             if "hashtag" not in normalized_titles:
-                completed.append(("Hashtags", "#finanzapersonale #investimenti #educazionefinanziaria"))
+                completed.append(("Hashtag opzionali", "#ETF #investimenti #finanzapersonale #educazionefinanziaria"))
             return completed
 
         if not has_body and len(completed) == 1:
@@ -361,6 +368,39 @@ class ResponseFormatter:
         if not has_cta:
             completed.append(("CTA", "Salva questo contenuto e applica il primo passaggio oggi."))
         return completed
+
+    def _requested_content_format(self, normalized_request: str) -> str:
+        if any(term in normalized_request for term in ("reel", "tiktok", "short", "video")):
+            return "reel_tiktok"
+        if any(term in normalized_request for term in ("carousel", "carosello")):
+            return "carousel"
+        if "newsletter" in normalized_request:
+            return "newsletter"
+        if any(term in normalized_request for term in ("linkedin", "post")):
+            return "linkedin"
+        return "linkedin"
+
+    def _content_topic_from_text(self, user_message: str, blocks: list[tuple[str, str]]) -> str:
+        text = user_message
+        topic_patterns = (
+            r"riguardo\s+([^.\n]+)",
+            r"sugli?\s+([^.\n]+)",
+            r"su\s+([^.\n]+)",
+            r"about\s+([^.\n]+)",
+        )
+        for pattern in topic_patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                return self._clean_content_topic(match.group(1))
+        joined = " ".join(body for _, body in blocks)
+        if "etf" in f"{text} {joined}".lower():
+            return "ETF"
+        return "questo tema"
+
+    def _clean_content_topic(self, topic: str) -> str:
+        topic = re.sub(r"\b(per|il|la|lo|un|una|di|del|della|nel|nella|mio|tuo|semplice|contenuto)\b", " ", topic, flags=re.IGNORECASE)
+        topic = re.sub(r"\s+", " ", topic).strip(" .:;?")
+        return topic.upper() if topic.lower() == "etf" else topic
 
     def _render_dashboard_from_text(self, cleaned: str, markdown: bool) -> str:
         points = self._dedupe_points(self._extract_readable_lines(cleaned, limit=14))
