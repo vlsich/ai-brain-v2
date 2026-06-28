@@ -69,6 +69,8 @@ class ConversationStateManager:
             "chat_id": "VARCHAR(128) NOT NULL DEFAULT 'default'",
             "active_intent": "VARCHAR(64) NOT NULL DEFAULT ''",
             "last_assistant_response": "TEXT NOT NULL DEFAULT ''",
+            "last_content_topic": "VARCHAR(255) NOT NULL DEFAULT ''",
+            "last_content_format": "VARCHAR(64) NOT NULL DEFAULT ''",
             "last_output_type": "VARCHAR(64) NOT NULL DEFAULT ''",
         }
         for column_name, ddl in column_definitions.items():
@@ -146,7 +148,10 @@ class ConversationStateManager:
         state.active_goal = active_goal
         state.chat_id = self.chat_id
         state.last_assistant_response = self._compact(final_answer, 3000)
-        state.last_generated_content = self._compact(final_answer, 3000) if intent == "content_creation" else state.last_generated_content
+        if intent == "content_creation":
+            state.last_content_topic = self.extract_content_topic(effective_prompt or user_message)
+            state.last_content_format = self.extract_content_format(effective_prompt or user_message)
+            state.last_generated_content = self._compact(final_answer, 3000)
         state.last_output_type = last_output_type or spec.output_type
         state.last_user_message = self._compact(user_message, 1200)
         state.last_task_id = task_id
@@ -177,6 +182,10 @@ class ConversationStateManager:
         ]
         if state.active_goal:
             parts.append(f"Active goal: {state.active_goal}")
+        if state.last_content_topic:
+            parts.append(f"Last content topic: {state.last_content_topic}")
+        if state.last_content_format:
+            parts.append(f"Last content format: {state.last_content_format}")
         if state.last_generated_content:
             parts.append(f"Last generated content:\n{state.last_generated_content}")
         elif state.last_assistant_response:
@@ -190,6 +199,12 @@ class ConversationStateManager:
     def is_follow_up(self, prompt: str) -> bool:
         normalized = self._normalize(prompt)
         if normalized in FOLLOW_UP_PATTERNS:
+            return True
+        if re.fullmatch(r"(versione|version)\s+(reel|tiktok|linkedin|post|carousel|carosello|instagram|newsletter|video)\??", normalized):
+            return True
+        if re.fullmatch(r"(fammi|crea|prepara|dammi)?\s*(la\s*)?versione\s+(reel|tiktok|linkedin|post|carousel|carosello|instagram|newsletter|video)\??", normalized):
+            return True
+        if any(term in normalized for term in ("trasformalo in", "adattalo per", "adatta per")):
             return True
         if len(normalized.split()) <= 4 and any(pattern in normalized for pattern in FOLLOW_UP_PATTERNS):
             return True
@@ -233,11 +248,34 @@ class ConversationStateManager:
             f"Previous active intent: {state.active_intent or 'conversation'}\n"
             f"Previous output type: {state.last_output_type or 'conversation'}\n"
             f"Previous active goal: {state.active_goal or 'not set'}\n\n"
+            f"Previous content topic: {state.last_content_topic or state.active_topic}\n"
+            f"Previous content format: {state.last_content_format or 'not set'}\n\n"
             f"Previous generated content:\n{state.last_generated_content or state.last_assistant_response}\n\n"
             "Continue from the previous answer. If the previous output was incomplete, complete the missing sections. "
-            "If the previous task was content_creation, return the missing content sections directly. "
+            "If the user asks for a new version like reel, TikTok, LinkedIn or carousel, transform the previous content/topic "
+            "into that complete content asset. If the previous task was content_creation, return the missing content sections directly. "
             "Do not restart from scratch unless the user explicitly changes topic."
         )
+
+    def extract_content_format(self, text: str) -> str:
+        normalized = text.lower()
+        if any(term in normalized for term in ("reel", "tiktok", "short", "video")):
+            return "reel_tiktok"
+        if any(term in normalized for term in ("carousel", "carosello")):
+            return "carousel"
+        if "newsletter" in normalized:
+            return "newsletter"
+        if any(term in normalized for term in ("linkedin", "post")):
+            return "linkedin_post"
+        if "instagram" in normalized:
+            return "instagram_post"
+        return "linkedin_post"
+
+    def extract_content_topic(self, text: str) -> str:
+        clean = re.sub(r"(?i)\b(crea|scrivi|fammi|prepara|genera|dammi|proponi|sviluppa|trasformalo|adattalo)\b", "", text)
+        clean = re.sub(r"(?i)\b(un|una|il|la|lo|post|contenuto|script|caption|reel|tiktok|linkedin|carousel|carosello|newsletter|video|versione|per|su|riguardo|about)\b", " ", clean)
+        clean = re.sub(r"\s+", " ", clean).strip(" .:;")
+        return (clean or self.extract_topic(text))[:255]
 
     def _keywords(self, text: str) -> list[str]:
         stopwords = {

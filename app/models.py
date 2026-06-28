@@ -81,6 +81,8 @@ class ConversationState(Base):
     active_intent: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     active_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_assistant_response: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    last_content_topic: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    last_content_format: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     last_generated_content: Mapped[str] = mapped_column(Text, default="", nullable=False)
     last_output_type: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     last_user_message: Mapped[str] = mapped_column(Text, default="", nullable=False)

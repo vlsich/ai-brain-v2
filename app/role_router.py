@@ -73,6 +73,8 @@ ROLE_SPECS = {
 class RoleRouter:
     def detect_intent(self, text: str) -> str:
         normalized = text.lower()
+        if self._is_content_intent(normalized):
+            return "content_creation"
         if any(term in normalized for term in ("decidere", "decisione", "scelta", "scegliere", "conviene", "cosa faresti")):
             return "decision_support"
         if any(term in normalized for term in ("obiettivo", "obiettivi", "goal", "progresso obiettivo")):
@@ -81,13 +83,51 @@ class RoleRouter:
             return "task_management"
         if any(term in normalized for term in ("analizza", "analisi", "ricerca", "research", "mercato", "competitor", "benchmark", "confronta")):
             return "business_analysis"
-        content_terms = ("linkedin", "instagram", "tiktok", "carousel", "carosello", "newsletter", "video", "script", "post", "caption", "contenuto", "contenuti")
-        content_actions = ("crea", "scrivi", "fammi", "prepara", "genera", "dammi", "proponi", "sviluppa")
-        if any(term in normalized for term in content_terms) and any(action in normalized for action in content_actions):
-            return "content_creation"
         if any(term in normalized for term in ("strategia", "business", "monetizzazione", "funnel", "posizionamento", "crescita", "growth", "audience", "personal brand")):
             return "strategy"
         return "conversation"
+
+    def _is_content_intent(self, normalized: str) -> bool:
+        content_terms = (
+            "linkedin",
+            "instagram",
+            "tiktok",
+            "reel",
+            "carousel",
+            "carosello",
+            "newsletter",
+            "video",
+            "script",
+            "post",
+            "caption",
+            "contenuto",
+            "contenuti",
+            "versione reel",
+            "versione linkedin",
+            "versione tiktok",
+            "trasformalo in",
+            "adattalo per",
+            "adatta per",
+        )
+        content_actions = (
+            "crea",
+            "creare",
+            "scrivi",
+            "fammi",
+            "prepara",
+            "genera",
+            "dammi",
+            "proponi",
+            "sviluppa",
+            "trasforma",
+            "trasformalo",
+            "adatta",
+            "adattalo",
+            "versione",
+        )
+        if any(term in normalized for term in ("versione reel", "versione linkedin", "versione tiktok", "versione carousel", "versione carosello")):
+            return True
+        return any(term in normalized for term in content_terms) and any(action in normalized for action in content_actions)
 
     def spec_for_text(self, text: str) -> RoleSpec:
         return self.spec_for_intent(self.detect_intent(text))

@@ -161,6 +161,18 @@ class ResponseFormatter:
     def _detect_intent(self, user_message: str) -> str:
         text = user_message.lower().strip()
 
+        if self._is_content_intent(text):
+            if any(term in text for term in ("carousel", "carosello")):
+                return "carousel"
+            if any(term in text for term in ("reel", "tiktok", "video", "short", "script")):
+                return "video"
+            if "newsletter" in text:
+                return "newsletter"
+            if any(term in text for term in ("linkedin", "post")):
+                return "linkedin"
+            if "instagram" in text:
+                return "instagram"
+            return "linkedin"
         if any(term in text for term in ("decidere", "decisione", "scelta", "scegliere", "conviene", "cosa faresti")):
             return "decision_support"
         if any(term in text for term in ("carousel", "carosello")):
@@ -211,8 +223,29 @@ class ResponseFormatter:
         return "conversation"
 
     def _looks_like_content_request(self, text: str) -> bool:
-        action_terms = ("scrivi", "crea", "prepara", "genera", "fammi", "dammi", "proponi", "idee", "script", "copy", "caption", "hook")
+        action_terms = ("scrivi", "crea", "creare", "prepara", "genera", "fammi", "dammi", "proponi", "idee", "script", "copy", "caption", "hook", "versione", "trasformalo", "trasforma", "adattalo", "adatta")
         return any(term in text for term in action_terms)
+
+    def _is_content_intent(self, text: str) -> bool:
+        if "previous active intent: content_creation" in text:
+            return True
+        direct_terms = (
+            "crea un contenuto",
+            "creare un contenuto",
+            "versione reel",
+            "versione linkedin",
+            "versione tiktok",
+            "versione carousel",
+            "versione carosello",
+            "trasformalo in",
+            "adattalo per",
+            "adatta per",
+        )
+        if any(term in text for term in direct_terms):
+            return True
+        content_terms = ("post", "reel", "carousel", "carosello", "script", "caption", "linkedin", "tiktok", "instagram", "newsletter", "video", "contenuto", "contenuti")
+        action_terms = ("crea", "creare", "scrivi", "fammi", "prepara", "genera", "dammi", "proponi", "sviluppa", "versione", "trasforma", "trasformalo", "adatta", "adattalo")
+        return any(term in text for term in content_terms) and any(action in text for action in action_terms)
 
     def _render_conversation(self, cleaned: str, markdown: bool) -> str:
         lines = self._dedupe_points(self._extract_readable_lines(cleaned, limit=7))
