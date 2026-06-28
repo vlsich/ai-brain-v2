@@ -31,37 +31,32 @@ class BrainOS:
         self.orchestrator = Orchestrator(db, chat_id=chat_id)
 
     def handle(self, message: str, mode: str = "chat") -> dict[str, Any]:
+        direct_tool_result = self.tool_router.route(message, chat_id=self.chat_id)
+        if direct_tool_result.handled:
+            logger.info("BrainOS handled direct tool command before context build tool=%s", direct_tool_result.tool_name)
+            return self._handle_tool_result(
+                message=message,
+                tool_result=direct_tool_result,
+                memories_used=[],
+                mode=mode,
+                active_intent="tool_command",
+                output_type="tool_result",
+                effective_prompt=message,
+            )
+
         context = self.context_builder.build(message)
         tool_result = self.tool_router.route(context.effective_prompt, chat_id=self.chat_id)
 
         if tool_result.handled:
-            task = self.memory.create_task(message)
-            final = self.response_synthesizer.synthesize(
-                tool_result.response,
-                context=context,
-                format_message=tool_result.format_message or context.effective_prompt,
-            )
-            self.memory.save_agent_result(task.id, tool_result.tool_name, final)
-            self.memory.complete_task(task.id, final)
-            self.context_builder.conversation_state.update_after_response(
-                user_message=message,
-                effective_prompt=context.effective_prompt,
-                final_answer=final,
-                agents_used=[tool_result.tool_name],
-                active_intent=context.role_spec.intent,
-                last_output_type=context.role_spec.output_type,
-                active_goal=self._active_goal(context.effective_prompt, final),
-                task_id=task.id,
-            )
             logger.info("BrainOS handled via ToolRouter tool=%s", tool_result.tool_name)
-            return self._shape_response(
-                task_id=task.id,
-                final=final,
-                agents_used=[tool_result.tool_name],
+            return self._handle_tool_result(
+                message=message,
+                tool_result=tool_result,
                 memories_used=context.memories_used,
-                format_message=tool_result.format_message,
                 mode=mode,
-                results={tool_result.tool_name: final},
+                active_intent=context.role_spec.intent,
+                output_type=context.role_spec.output_type,
+                effective_prompt=context.effective_prompt,
             )
 
         logger.info("BrainOS delegating to orchestrator intent=%s role=%s", context.role_spec.intent, context.role_spec.role)
@@ -83,6 +78,44 @@ class BrainOS:
 
     def handle_task(self, task: str) -> dict[str, Any]:
         return self.handle(task, mode="task")
+
+    def _handle_tool_result(
+        self,
+        message: str,
+        tool_result: Any,
+        memories_used: list[dict[str, Any]],
+        mode: str,
+        active_intent: str,
+        output_type: str,
+        effective_prompt: str,
+    ) -> dict[str, Any]:
+        task = self.memory.create_task(message)
+        final = self.response_synthesizer.synthesize(
+            tool_result.response,
+            context=None,
+            format_message=tool_result.format_message or effective_prompt,
+        )
+        self.memory.save_agent_result(task.id, tool_result.tool_name, final)
+        self.memory.complete_task(task.id, final)
+        self.context_builder.conversation_state.update_after_response(
+            user_message=message,
+            effective_prompt=effective_prompt,
+            final_answer=final,
+            agents_used=[tool_result.tool_name],
+            active_intent=active_intent,
+            last_output_type=output_type,
+            active_goal=None,
+            task_id=task.id,
+        )
+        return self._shape_response(
+            task_id=task.id,
+            final=final,
+            agents_used=[tool_result.tool_name],
+            memories_used=memories_used,
+            format_message=tool_result.format_message,
+            mode=mode,
+            results={tool_result.tool_name: final},
+        )
 
     def _shape_response(
         self,

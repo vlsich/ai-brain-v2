@@ -73,8 +73,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info("Telegram message received chat_id=%s text=%r", update.effective_chat.id if update.effective_chat else None, message)
 
     if is_chat_id_request(message):
-        chat_id = update.effective_chat.id if update.effective_chat else "non disponibile"
-        await reply_text(update, format_static_reply(message, f"Il tuo chat id Telegram e:\n{chat_id}"))
+        await send_chat_id(update)
         return
 
     await update.message.chat.send_action(action=ChatAction.TYPING)
@@ -177,16 +176,34 @@ def strip_html(text: str) -> str:
     return re.sub(r"</?[^>]+>", "", text)
 
 
+async def chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await send_chat_id(update)
+
+
+async def send_chat_id(update: Update) -> None:
+    if not update.message:
+        return
+    chat_id = update.effective_chat.id if update.effective_chat else "non disponibile"
+    logger.info("Handled chat id command directly chat_id=%s", chat_id)
+    await update.message.reply_text(f"Il tuo chat ID è: {chat_id}")
+
+
 def is_chat_id_request(message: str) -> bool:
-    normalized = message.lower().strip(" ?")
+    normalized = normalize_command_text(message)
     return normalized in {
         "qual è il mio chat id",
         "qual e il mio chat id",
-        "qual è il mio chat id?",
-        "qual e il mio chat id?",
         "chat id",
         "mio chat id",
+        "/chatid",
+        "/id",
     }
+
+
+def normalize_command_text(message: str) -> str:
+    normalized = message.lower().strip()
+    normalized = re.sub(r"[?!.\n\t]+$", "", normalized).strip()
+    return " ".join(normalized.split())
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -213,6 +230,8 @@ def build_application() -> Application:
     )
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("chatid", chat_id_command))
+    application.add_handler(CommandHandler("id", chat_id_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     application.add_error_handler(error_handler)
     return application

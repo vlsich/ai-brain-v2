@@ -140,6 +140,8 @@ class ToolRouter:
             "qual è il mio chat id",
             "chat id",
             "mio chat id",
+            "/chatid",
+            "/id",
         }
 
     def _matches(self, normalized: str, patterns: tuple[str, ...]) -> bool:
