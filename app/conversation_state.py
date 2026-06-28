@@ -131,8 +131,16 @@ class ConversationStateManager:
 
         intent = active_intent or self.role_router.detect_intent(effective_prompt or user_message)
         spec = self.role_router.spec_for_intent(intent)
-        state.active_topic = self.extract_topic(effective_prompt or user_message)
-        state.active_task = self._compact(effective_prompt or user_message, 1800)
+        is_follow_up = self.is_follow_up(user_message)
+        if is_follow_up and state.active_topic:
+            active_topic = state.active_topic
+            active_task = state.active_task or self._compact(effective_prompt or user_message, 1800)
+        else:
+            active_topic = self.extract_topic(effective_prompt or user_message)
+            active_task = self._compact(effective_prompt or user_message, 1800)
+
+        state.active_topic = active_topic
+        state.active_task = active_task
         state.active_agent = agents_used[0] if agents_used else "manager"
         state.active_intent = intent
         state.active_goal = active_goal

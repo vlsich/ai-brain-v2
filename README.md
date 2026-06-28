@@ -21,6 +21,19 @@ Sistema multi-agente con memoria persistente locale.
 - `WeeklyReviewAgent`: produce review settimanali su progressi, task completati, decisioni e allineamento agli obiettivi.
 - `MemoryCuratorAgent`: dopo ogni task decide cosa salvare nella memoria a lungo termine.
 
+## Conversational State e ruoli
+
+AI Brain mantiene uno stato conversazionale per chat: topic attivo, task attivo, agente attivo, intent, ultimo messaggio utente, ultima risposta, ultimo contenuto generato e tipo di output. I follow-up come `continua`, `e il resto?`, `approfondisci`, `finiscilo`, `completa` e `fammi la versione completa` riprendono il contenuto precedente invece di aprire una nuova conversazione.
+
+Il sistema assegna anche un ruolo professionale in base all'intent:
+
+- `content_creation`: Content Director
+- `strategy`: Strategy Advisor
+- `business_analysis`: Research Analyst
+- `tasks/priorities`: Operations Manager
+- `goals`: CEO/Manager Agent
+- `decisions`: Executive Advisor
+
 ## Setup
 
 ```bash
